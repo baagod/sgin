@@ -16,16 +16,16 @@ type Router interface {
 }
 
 type App struct {
-	e *gin.Engine
+	*gin.Engine
 }
 
 func New() *App {
-	app := &App{e: gin.New()}
+	app := &App{Engine: gin.New()}
 	return app
 }
 
 func (app *App) Use(args ...Handler) Router {
-	app.e.Use(HandlerFunc(args...)...)
+	app.Engine.Use(HandlerFunc(args...)...)
 	return app
 }
 
@@ -38,11 +38,11 @@ func (app *App) Post(path string, handlers ...Handler) Router {
 }
 
 func (app *App) Group(path string, handlers ...Handler) Router {
-	r := app.e.Group(path, HandlerFunc(handlers...)...)
+	r := app.Engine.Group(path, HandlerFunc(handlers...)...)
 	return &Group{r: r}
 }
 
 func (app *App) Add(method string, path string, handlers ...Handler) Router {
-	app.e.Handle(method, path, HandlerFunc(handlers...)...)
+	app.Engine.Handle(method, path, HandlerFunc(handlers...)...)
 	return app
 }
