@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"io"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -22,7 +24,7 @@ type Ctx struct {
 	Writer  http.ResponseWriter
 	Params  gin.Params
 
-	ctx  *gin.Context
+	c    *gin.Context
 	args map[string]any
 }
 
@@ -32,7 +34,7 @@ func (c *Ctx) Args() map[string]any {
 	if c.args == nil {
 		c.args = map[string]any{}
 
-		switch c.ctx.ContentType() {
+		switch c.c.ContentType() {
 		case "", gin.MIMEPOSTForm, gin.MIMEMultipartPOSTForm:
 			_ = c.Request.ParseMultipartForm(32 << 20)
 			for k, v := range c.Request.Form {
@@ -85,79 +87,88 @@ func (c *Ctx) ArgBool(key string) bool {
 }
 
 func (c *Ctx) Bind(v any) (err error) {
-	switch c.ctx.ContentType() {
+	switch c.c.ContentType() {
 	case gin.MIMEJSON:
-		return c.ctx.ShouldBindBodyWith(v, binding.JSON)
+		return c.c.ShouldBindBodyWith(v, binding.JSON)
 	case gin.MIMEXML, gin.MIMEXML2:
-		return c.ctx.ShouldBindBodyWith(v, binding.XML)
+		return c.c.ShouldBindBodyWith(v, binding.XML)
 	}
-	return c.ctx.ShouldBind(v)
+	return c.c.ShouldBind(v)
 }
 
 // ------ RESPONSE 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
-	_format(c.ctx, body, format...)
+	_format(c.c, body, format...)
 	return nil
 }
 
 func (c *Ctx) SendStatus(code int) error {
-	c.ctx.AbortWithStatus(code)
+	c.c.AbortWithStatus(code)
+	return nil
+}
+
+func (c *Ctx) SendFile(file string, attachment ...bool) error {
+	filename := filepath.Base(file)
+	if append(attachment, false)[0] {
+		c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+	}
+	c.c.File(file)
 	return nil
 }
 
 func (c *Ctx) Next() error {
-	c.ctx.Next()
+	c.c.Next()
 	return nil
 }
 
 // ------ SET 设置 ------
 
 func (c *Ctx) Status(code int) *Ctx {
-	c.ctx.Status(code)
+	c.c.Status(code)
 	return c
 }
 
 func (c *Ctx) Set(key string, value ...any) any {
 	if value != nil {
-		c.ctx.Set(key, value[0])
+		c.c.Set(key, value[0])
 		return nil
 	}
-	v, _ := c.ctx.Get(key)
+	v, _ := c.c.Get(key)
 	return v
 }
 
 // ------ GET 获取 ------
 
 func (c *Ctx) Method() string {
-	return c.ctx.Request.Method
+	return c.c.Request.Method
 }
 
 func (c *Ctx) Header(key string, value ...string) string {
 	if value != nil {
-		c.ctx.Header(key, value[0])
+		c.c.Header(key, value[0])
 		return ""
 	}
-	return c.ctx.GetHeader(key)
+	return c.c.GetHeader(key)
 }
 
 func (c *Ctx) HeaderOrQuery(key string) (value string) {
 	if value = c.Header(key); value == "" {
-		value = c.ctx.Query(key)
+		value = c.c.Query(key)
 	}
 	return
 }
 
 func (c *Ctx) StatusCode() int {
-	return c.ctx.Writer.Status()
+	return c.c.Writer.Status()
 }
 
 func (c *Ctx) Path() string {
-	return c.ctx.Request.URL.Path
+	return c.c.Request.URL.Path
 }
 
 func (c *Ctx) IP() (ip string) {
-	if ip = c.ctx.ClientIP(); ip == "::1" {
+	if ip = c.c.ClientIP(); ip == "::1" {
 		ip = "127.0.0.1"
 	}
 	return ip

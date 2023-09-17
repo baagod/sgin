@@ -28,7 +28,7 @@ func HandlerFunc(a ...Handler) []gin.HandlerFunc {
 				ctx, _ := c.Keys["_sgin/ctxkey"].(*Ctx)
 				if ctx == nil {
 					ctx = &Ctx{
-						ctx:     c,
+						c:       c,
 						Request: c.Request,
 						Writer:  c.Writer,
 						Params:  c.Params,
