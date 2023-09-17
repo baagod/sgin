@@ -27,7 +27,12 @@ func HandlerFunc(a ...Handler) []gin.HandlerFunc {
 			} else { // 如果不是，则第一个参数必须是 *sgin.Ctx，否则会出错。
 				ctx, _ := c.Keys["_sgin/ctxkey"].(*Ctx)
 				if ctx == nil {
-					ctx = &Ctx{ctx: c, Request: c.Request}
+					ctx = &Ctx{
+						ctx:     c,
+						Request: c.Request,
+						Writer:  c.Writer,
+						Params:  c.Params,
+					}
 					c.Set("_sgin/ctxkey", ctx)
 				}
 				in = append(in, reflect.ValueOf(ctx))

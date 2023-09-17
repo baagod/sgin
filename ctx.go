@@ -19,8 +19,11 @@ const (
 
 type Ctx struct {
 	Request *http.Request
-	ctx     *gin.Context
-	args    map[string]any
+	Writer  http.ResponseWriter
+	Params  gin.Params
+
+	ctx  *gin.Context
+	args map[string]any
 }
 
 // ------ ARGS 参数 ------
