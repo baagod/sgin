@@ -12,7 +12,8 @@ type Router interface {
 	Get(path string, handlers ...Handler) Router
 	Post(path string, handlers ...Handler) Router
 	Group(path string, handlers ...Handler) Router
-	Add(method string, path string, handlers ...Handler) Router
+	Add(method, path string, handlers ...Handler) Router
+	Static(path, root string) Router
 }
 
 type RouterGroup struct {
@@ -39,5 +40,10 @@ func (grp *RouterGroup) Group(path string, handlers ...Handler) Router {
 
 func (grp *RouterGroup) Add(method string, path string, handlers ...Handler) Router {
 	grp.r.Handle(method, path, HandlerFunc(handlers...)...)
+	return grp
+}
+
+func (grp *RouterGroup) Static(path, root string) Router {
+	grp.r.Static(path, root)
 	return grp
 }
