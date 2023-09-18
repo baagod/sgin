@@ -21,7 +21,7 @@ type RouterGroup struct {
 }
 
 func (grp *RouterGroup) Use(args ...Handler) Router {
-	grp.r.Use(HandlerFunc(args)...)
+	grp.r.Use(HandlerFunc(args...)...)
 	return grp
 }
 
