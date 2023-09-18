@@ -34,7 +34,7 @@ r.Get("/index", func(c *sgin.Ctx, r Request) {
 })
 ```
 
-`Send(any, ...string)` 方法会根据请求头 `Accept` 自动返回对应的数据类型，也可以将想要发送的其他格式传递给第二个参数 `format`，如 `sgin.FormatJSON` 或 `sgin.FormatXML`。
+`Send(any, ...string)` 方法会自动根据请求头 `Accept` 返回对应的数据类型，也可以将想要发送的其他格式传递给第二个参数 `format`，如 `sgin.FormatJSON` 或 `sgin.FormatXML`。
 
 但是如果发送的数据类型是 `Error` 或 `String`，则忽略上面的条件直接返回 `String` 响应。
 
@@ -61,14 +61,14 @@ r.Get("/index", func(c *sgin.Ctx) (r *sgin.Response) {
     这样我们就可以不再用区分是何种请求方式，直接调用 `Args()` 就能拿到你想要的数据。其他如 `ArgInt()`、`ArgBool()...` 方法都是该方法的快捷方式。
 
 - `Set(key string, ...any) any`：如果给定第二个参数，则将值设置在上下文中，否则返回 `key` 的值；
-- `Header(key string, ...any) any`：该方法返回或设置请求头的值。此外 `sgin` 定义了许多枚举来帮助你快速找到某个请求头，例如要获取内容类型：`Header(sgin.ContentType)`；
+- `Header(key string, ...any) any`：该方法返回或设置请求头的值。此外 `sgin` 定义了许多枚举来帮助你快速找到某个请求头，例如要获取内容类型：`Header(sgin.HeaderContentType)`；
 - `Bind(any) error`：将请求数据绑定到一个结构体中，该方法遇到错误不会终止请求；
 - `SendStatus(int) error`：发送状态码响应；
-- `SendFile(file string, attachment ...bool) error`：发送文件。`attachment` 表示是否要将其作为下载内容；
-- `Status(code int) *Ctx`：设置响应状态码；
+- `SendFile(string, attachment ...bool) error`：发送文件。`attachment` 表示是否要将其作为下载内容；
+- `Status(int) *Ctx`：设置响应状态码；
 - `StatusCode() int`：获取响应状态码；
 - `Method() string`：获取请求方法；
-- `HeaderOrQuery(key string) string`：返回请求头 (优先) 或查询参数；
+- `HeaderOrQuery(string) string`：返回请求头 (优先) 或查询参数；
 - `Path() string`：返回 `c.c.Request.URL.Path`；
 - `IP() string`：返回远程客户端 IP，如果是本机则返回 127.0.0.1；
 
