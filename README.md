@@ -7,7 +7,6 @@
 ## 使用
 
 ```go
-r := sgin.New()
 r := sgin.New(sgin.Config{
     Mode: gin.DebugMode, // 默认值
     // 相当于 LoadHTMLGlob() 或 LoadHTMLFiles()

@@ -12,8 +12,8 @@ func HandlerFunc(a ...Handler) []gin.HandlerFunc {
 	var handlers []gin.HandlerFunc
 
 	for _, f := range a {
-		if handler, ok := f.(gin.HandlerFunc); ok {
-			handlers = append(handlers, handler)
+		if v, ok := f.(gin.HandlerFunc); ok {
+			handlers = append(handlers, v)
 			continue
 		}
 

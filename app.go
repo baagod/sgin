@@ -34,13 +34,17 @@ func New(f ...Config) *App {
 		e = gin.New()
 	}
 
-	if len(cfg.Views) == 1 {
-		e.LoadHTMLGlob(cfg.Views[0])
-	} else {
-		e.LoadHTMLFiles(cfg.Views...)
+	if views := len(cfg.Views); views > 0 {
+		if views == 1 {
+			e.LoadHTMLGlob(cfg.Views[0])
+		} else {
+			e.LoadHTMLFiles(cfg.Views...)
+		}
 	}
 
-	return &App{e: e, RouterGroup: RouterGroup{&e.RouterGroup}}
+	app := &App{e: e, RouterGroup: RouterGroup{r: &e.RouterGroup, root: true}}
+	app.RouterGroup.app = app
+	return app
 }
 
 func (app *App) Routes() gin.RoutesInfo {

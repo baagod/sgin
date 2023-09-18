@@ -17,12 +17,14 @@ type Router interface {
 }
 
 type RouterGroup struct {
-	r *gin.RouterGroup
+	r    *gin.RouterGroup
+	app  *App
+	root bool
 }
 
 func (grp *RouterGroup) Use(args ...Handler) Router {
-	grp.r.Use(HandlerFunc(args...)...)
-	return grp
+	grp.iRouter().Use(HandlerFunc(args...)...)
+	return grp.router()
 }
 
 func (grp *RouterGroup) Get(path string, handlers ...Handler) Router {
@@ -35,15 +37,29 @@ func (grp *RouterGroup) Post(path string, handlers ...Handler) Router {
 
 func (grp *RouterGroup) Group(path string, handlers ...Handler) Router {
 	r := grp.r.Group(path, HandlerFunc(handlers...)...)
-	return &RouterGroup{r}
+	return &RouterGroup{r: r, app: grp.app}
 }
 
 func (grp *RouterGroup) Add(method string, path string, handlers ...Handler) Router {
-	grp.r.Handle(method, path, HandlerFunc(handlers...)...)
-	return grp
+	grp.iRouter().Handle(method, path, HandlerFunc(handlers...)...)
+	return grp.router()
 }
 
 func (grp *RouterGroup) Static(path, root string) Router {
-	grp.r.Static(path, root)
+	grp.iRouter().Static(path, root)
+	return grp.router()
+}
+
+func (grp *RouterGroup) iRouter() gin.IRouter {
+	if grp.root {
+		return grp.app.e
+	}
+	return grp.r
+}
+
+func (grp *RouterGroup) router() Router {
+	if grp.root {
+		return grp.app
+	}
 	return grp
 }
