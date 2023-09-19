@@ -72,15 +72,13 @@ func handleResult(c *gin.Context, out ...reflect.Value) {
 		return
 	}
 
-	var st int
 	body := out[0].Interface()
-
 	if body == nil {
 		return
 	}
 
-	if v, ok := body.(int); ok { // 如果第一个输出参数是 int 类型
-		if st = v; len(out) == 1 { // 如果只有一个输出参数
+	if st, ok := body.(int); ok { // 如果第一个输出参数是 int 类型
+		if len(out) == 1 { // 如果只有一个输出参数
 			c.AbortWithStatus(st)
 			return
 		}
