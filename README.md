@@ -61,7 +61,6 @@ r.Get("/index", func(c *sgin.Ctx) (r *sgin.Response) {
 
 - `Set(key string, ...any) any`：如果给定第二个参数，则将值设置在上下文中，否则返回 `key` 的值；
 - `Header(key string, ...any) any`：该方法返回或设置请求头的值。此外 `sgin` 定义了许多枚举来帮助你快速找到某个请求头，例如要获取内容类型：`Header(sgin.HeaderContentType)`；
-- `Bind(any) error`：将请求数据绑定到一个结构体中，该方法遇到错误不会终止请求；
 - `SendStatus(int) error`：发送状态码响应；
 - `SendFile(string, attachment ...bool) error`：发送文件。`attachment` 表示是否要将其作为下载内容；
 - `Status(int) *Ctx`：设置响应状态码；
