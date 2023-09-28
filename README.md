@@ -68,7 +68,7 @@ r.Get("/index", func(c *sgin.Ctx) (r *sgin.Response) {
 - `StatusCode() int`：获取响应状态码；
 - `Method() string`：获取请求方法；
 - `HeaderOrQuery(string) string`：返回请求头 (优先) 或查询参数；
-- `Path() string`：返回 `c.c.Request.URL.Path`；
+- `Path() string`：返回 `Request.URL.Path`；
 - `IP() string`：返回远程客户端 IP，如果是本机则返回 127.0.0.1；
 
 [视频教程](https://www.bilibili.com/video/BV1Nh4y1e7kk/?vd_source=7ae7a1bdbc2bfacc227a70634fc5d2c2#reply186203730000)
