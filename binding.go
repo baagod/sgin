@@ -28,7 +28,3 @@ func (uri) BindUri(m map[string][]string, obj any) error {
 func (uri) Bind(*http.Request, any) error {
 	panic("please use BindUri()")
 }
-
-func Binding(bb ...binding.Binding) []binding.Binding {
-	return bb
-}
