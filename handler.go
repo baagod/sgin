@@ -16,7 +16,7 @@ var ginCtxType = reflect.TypeOf(&gin.Context{})
 type (
 	AnyHandler any
 	Handler    struct {
-		Binding *Binding
+		Binding []binding.Binding
 		Fn      AnyHandler
 		Error   func(*gin.Context, error)
 	}
@@ -72,21 +72,24 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 	return handlers
 }
 
-func bindIn(c *gin.Context, bind *Binding, T reflect.Type) (v reflect.Value, err error) {
+func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v reflect.Value, err error) {
 	v = reflect.New(T.Elem()) // *T-value
 	ptr := v.Interface()
 	var names = map[string]bool{"form": false, "xml": false, "toml": false, "yaml": false, "json": false}
 
-	if bind != nil {
-		if bind.Uri != nil {
-			if err = c.ShouldBindUri(ptr); err != nil {
-				return
-			}
-		}
-
-		for _, x := range bind.Bindings {
+	if bindings != nil {
+		for _, x := range bindings {
 			name := x.Name()
 			names[name] = true
+			if v, ok := x.(binding.BindingUri); ok {
+				m := make(map[string][]string)
+				for _, v := range c.Params {
+					m[v.Key] = []string{v.Value}
+				}
+				if err = v.BindUri(m, ptr); err != nil {
+					return
+				}
+			}
 			if bb, ok := x.(binding.BindingBody); ok {
 				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
 					if err == io.EOF {

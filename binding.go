@@ -29,19 +29,6 @@ func (uri) Bind(*http.Request, any) error {
 	panic("please use BindUri()")
 }
 
-type Binding struct {
-	Uri      binding.BindingUri
-	Bindings []binding.Binding
-}
-
-func Bind(bb ...binding.Binding) (opt *Binding) {
-	opt = &Binding{Bindings: bb}
-	for i, x := range bb {
-		if x.Name() == "uri" {
-			opt.Uri = x.(binding.BindingUri)
-			opt.Bindings = append(bb[:i], bb[i+1:]...)
-			return
-		}
-	}
-	return
+func Binding(bb ...binding.Binding) []binding.Binding {
+	return bb
 }
