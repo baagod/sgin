@@ -6,13 +6,13 @@ import (
 )
 
 var (
-	Uri    = &uri{}
-	Form   = &binding.Form
-	JSON   = &binding.JSON
-	XML    = &binding.XML
-	TOML   = &binding.TOML
-	YAML   = &binding.YAML
-	Header = &binding.Header
+	Uri    = uri{}
+	Form   = binding.Form
+	JSON   = binding.JSON
+	XML    = binding.XML
+	TOML   = binding.TOML
+	YAML   = binding.YAML
+	Header = binding.Header
 )
 
 type uri struct{}
