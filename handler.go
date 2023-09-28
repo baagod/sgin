@@ -1,40 +1,98 @@
 package sgin
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"io"
+	"net/http"
 	"reflect"
 	"strings"
 )
 
-type AnyHandler any
-
 var ginCtxType = reflect.TypeOf(&gin.Context{})
 
-// Handler 处理器
-type Handler struct {
-	Bindings *BindingOption
-	Fn       AnyHandler
-	Error    func(*gin.Context, error)
+type (
+	AnyHandler any
+	Handler    struct {
+		Binding *Binding
+		Fn      AnyHandler
+		Error   func(*gin.Context, error)
+	}
+)
+
+func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
+	for _, f := range a {
+		if v, ok := f.(gin.HandlerFunc); ok {
+			handlers = append(handlers, v)
+			continue
+		}
+
+		var h *Handler
+		if h, _ = f.(*Handler); h == nil {
+			h = &Handler{Fn: f}
+		}
+
+		fnV := reflect.ValueOf(h.Fn)
+		fnT := fnV.Type()
+
+		handlers = append(handlers, func(c *gin.Context) {
+			var in []reflect.Value       // 输入参数 | 0: 上下文, 1: 输入参数
+			if fnT.In(0) == ginCtxType { // 如果第一个参数是 *gin.Context
+				in = append(in, reflect.ValueOf(c))
+			} else { // 如果不是，则第一个参数必须是 *sgin.Ctx，否则会出错。
+				ctx, _ := c.Keys["_sgin/ctxkey"].(*Ctx)
+				if ctx == nil {
+					ctx = &Ctx{c: c, Request: c.Request, Writer: c.Writer, Params: c.Params}
+					c.Set("_sgin/ctxkey", ctx)
+				}
+				in = append(in, reflect.ValueOf(ctx))
+			}
+
+			if fnT.NumIn() == 2 { // 第二个参数被视为要绑定的输入参数
+				val, err := bindIn(c, h.Binding, fnT.In(1)) // 绑定输入参数
+				if err != nil {                             // 处理错误
+					if c.Abort(); h.Error != nil {
+						h.Error(c, err)
+					} else if r.error != nil {
+						r.error(c, err)
+					} else {
+						c.String(http.StatusInternalServerError, err.Error())
+					}
+					return
+				}
+				in = append(in, val)
+			}
+
+			retResponse(c, fnV.Call(in)...)
+		})
+	}
+
+	return handlers
 }
 
-func bindIn(c *gin.Context, bindOpts *BindingOption, T reflect.Type) (v reflect.Value, err error) {
+func bindIn(c *gin.Context, bind *Binding, T reflect.Type) (v reflect.Value, err error) {
 	v = reflect.New(T.Elem()) // *T-value
 	ptr := v.Interface()
 	var names = map[string]bool{"form": false, "xml": false, "toml": false, "yaml": false, "json": false}
 
-	if bindOpts != nil {
-		if bindOpts.Uri != nil {
+	if bind != nil {
+		if bind.Uri != nil {
 			if err = c.ShouldBindUri(ptr); err != nil {
 				return
 			}
 		}
 
-		for _, x := range bindOpts.Bindings {
-			names[x.Name()] = true
+		for _, x := range bind.Bindings {
+			name := x.Name()
+			names[name] = true
 			if bb, ok := x.(binding.BindingBody); ok {
 				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
+					if err == io.EOF {
+						text := fmt.Sprintf("bind %s error: %v", name, err)
+						err = errors.New(text)
+					}
 					return
 				}
 				continue
@@ -84,10 +142,10 @@ func retResponse(c *gin.Context, out ...reflect.Value) {
 		body = out[1].Interface() // 获取第二个输入参数
 	}
 
-	format(c, body)
+	_format(c, body)
 }
 
-func format(c *gin.Context, body any, format ...string) {
+func _format(c *gin.Context, body any, format ...string) {
 	if c.Abort(); body == nil { // 停止继续处理
 		return
 	}

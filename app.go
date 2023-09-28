@@ -42,7 +42,7 @@ func New(f ...Config) *App {
 		}
 	}
 
-	app := &App{e: e, RouterGroup: RouterGroup{r: &e.RouterGroup, root: true}}
+	app := &App{e: e, RouterGroup: RouterGroup{grp: &e.RouterGroup, root: true}}
 	app.RouterGroup.app = app
 	return app
 }

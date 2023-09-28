@@ -87,7 +87,7 @@ func (c *Ctx) ArgBool(key string) bool {
 // ------ RESPONSE 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
-	format(c.c, body, format...)
+	_format(c.c, body, format...)
 	return nil
 }
 

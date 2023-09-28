@@ -5,7 +5,15 @@ import (
 	"net/http"
 )
 
-var Uri = uri{}
+var (
+	Uri    = &uri{}
+	Form   = &binding.Form
+	JSON   = &binding.JSON
+	XML    = &binding.XML
+	TOML   = &binding.TOML
+	YAML   = &binding.YAML
+	Header = &binding.Header
+)
 
 type uri struct{}
 
@@ -18,22 +26,22 @@ func (uri) BindUri(m map[string][]string, obj any) error {
 }
 
 func (uri) Bind(*http.Request, any) error {
-	return nil
+	panic("please use BindUri()")
 }
 
-type BindingOption struct {
+type Binding struct {
 	Uri      binding.BindingUri
 	Bindings []binding.Binding
 }
 
-func Bindings(opt ...binding.Binding) *BindingOption {
-	opts := &BindingOption{Bindings: opt}
-	for i, x := range opt {
+func Bind(bb ...binding.Binding) (opt *Binding) {
+	opt = &Binding{Bindings: bb}
+	for i, x := range bb {
 		if x.Name() == "uri" {
-			opts.Uri = x.(binding.BindingUri)
-			opts.Bindings = append(opt[:i], opt[i+1:]...)
-			continue
+			opt.Uri = x.(binding.BindingUri)
+			opt.Bindings = append(bb[:i], bb[i+1:]...)
+			return
 		}
 	}
-	return opts
+	return
 }
