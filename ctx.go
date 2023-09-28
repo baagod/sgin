@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"io"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -34,12 +32,12 @@ func (c *Ctx) Args() map[string]any {
 	if c.args == nil {
 		c.args = map[string]any{}
 
+		_ = c.Request.ParseMultipartForm(32 << 20)
+		for k, v := range c.Request.Form {
+			c.args[k] = v[0]
+		}
+
 		switch c.c.ContentType() {
-		case "", gin.MIMEPOSTForm, gin.MIMEMultipartPOSTForm:
-			_ = c.Request.ParseMultipartForm(32 << 20)
-			for k, v := range c.Request.Form {
-				c.args[k] = v[0]
-			}
 		case gin.MIMEJSON:
 			body, ok := c.Set(gin.BodyBytesKey).([]byte)
 			if !ok {
@@ -86,20 +84,10 @@ func (c *Ctx) ArgBool(key string) bool {
 	return v != "" && v != "0"
 }
 
-func (c *Ctx) Bind(v any) (err error) {
-	switch c.c.ContentType() {
-	case gin.MIMEJSON:
-		return c.c.ShouldBindBodyWith(v, binding.JSON)
-	case gin.MIMEXML, gin.MIMEXML2:
-		return c.c.ShouldBindBodyWith(v, binding.XML)
-	}
-	return c.c.ShouldBind(v)
-}
-
 // ------ RESPONSE 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
-	_format(c.c, body, format...)
+	format(c.c, body, format...)
 	return nil
 }
 
@@ -172,35 +160,4 @@ func (c *Ctx) IP() (ip string) {
 		ip = "127.0.0.1"
 	}
 	return ip
-}
-
-// ------ PRIVATE 私有 ------
-
-func _format(c *gin.Context, body any, format ...string) {
-	if c.Abort(); body == nil { // 停止继续处理
-		return
-	}
-
-	status := c.Writer.Status()
-	accept := c.GetHeader(HeaderAccept)
-
-	switch body.(type) {
-	case string, error:
-		c.String(status, fmt.Sprint(body))
-		return
-	}
-
-	f := append(format, "")[0]
-	if f == FormatJSON || strings.Contains(accept, gin.MIMEJSON) { // 优先返回 JSON
-		c.JSON(status, body)
-		return
-	} else if f == FormatXML || strings.Contains(accept, gin.MIMEXML) || strings.Contains(accept, gin.MIMEXML2) {
-		c.XML(status, body)
-		return
-	} else if strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {
-		c.String(status, fmt.Sprint(body))
-		return
-	}
-
-	c.JSON(status, body) // 默认返回 JSON
 }
