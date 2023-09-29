@@ -75,7 +75,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v reflect.Value, err error) {
 	v = reflect.New(T.Elem()) // *T-value
 	ptr := v.Interface()
-	var names = map[string]bool{"form": false, "xml": false, "toml": false, "yaml": false, "json": false}
+	var names = map[string]bool{}
 
 	if bindings != nil {
 		for _, b := range bindings {
@@ -107,23 +107,21 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 		}
 	}
 
-	if !names["form"] && c.Request.Method == http.MethodGet {
-		names["form"] = true
+	ct := c.ContentType()
+	if _, ok := names["form"]; !ok && ct == "" {
 		err = c.ShouldBindWith(ptr, binding.Form)
 	}
 
-	if ct := c.ContentType(); ct == gin.MIMEJSON && !names["json"] {
+	if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
 		err = c.ShouldBindBodyWith(ptr, binding.JSON)
-	} else if (ct == gin.MIMEXML || ct == gin.MIMEXML2) && !names["xml"] {
+	} else if _, ok = names["xml"]; !ok && ct == gin.MIMEXML || ct == gin.MIMEXML2 {
 		err = c.ShouldBindBodyWith(ptr, binding.XML)
-	} else if ct == gin.MIMETOML && !names["toml"] {
+	} else if _, ok = names["toml"]; !ok && ct == gin.MIMETOML {
 		err = c.ShouldBindBodyWith(ptr, binding.TOML)
-	} else if ct == gin.MIMEYAML && !names["yaml"] {
+	} else if _, ok = names["yaml"]; !ok && ct == gin.MIMEYAML {
 		err = c.ShouldBindBodyWith(ptr, binding.YAML)
-	} else if ct == "" || ct == gin.MIMEPOSTForm || ct == gin.MIMEMultipartPOSTForm {
-		if !names["form"] {
-			err = c.ShouldBindWith(ptr, binding.Form)
-		}
+	} else if _, ok = names["form"]; !ok && ct == gin.MIMEPOSTForm || ct == gin.MIMEMultipartPOSTForm {
+		err = c.ShouldBindWith(ptr, binding.Form)
 	}
 
 	return
