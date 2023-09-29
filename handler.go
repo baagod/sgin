@@ -89,9 +89,7 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 				if err = vu.BindUri(m, ptr); err != nil {
 					return
 				}
-				continue
-			}
-			if bb, ok := b.(binding.BindingBody); ok {
+			} else if bb, ok := b.(binding.BindingBody); ok {
 				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
 					if err == io.EOF {
 						text := fmt.Sprintf("bind %s error: %v", name, err)
@@ -99,9 +97,7 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 					}
 					return
 				}
-				continue
-			}
-			if err = c.ShouldBindWith(ptr, b); err != nil {
+			} else if err = c.ShouldBindWith(ptr, b); err != nil {
 				return
 			}
 		}
