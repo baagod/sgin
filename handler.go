@@ -81,14 +81,15 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 		for _, x := range bindings {
 			name := x.Name()
 			names[name] = true
-			if v, ok := x.(binding.BindingUri); ok {
+			if vu, ok := x.(binding.BindingUri); ok {
 				m := make(map[string][]string)
 				for _, v := range c.Params {
 					m[v.Key] = []string{v.Value}
 				}
-				if err = v.BindUri(m, ptr); err != nil {
+				if err = vu.BindUri(m, ptr); err != nil {
 					return
 				}
+				continue
 			}
 			if bb, ok := x.(binding.BindingBody); ok {
 				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
@@ -104,6 +105,11 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 				return
 			}
 		}
+	}
+
+	if !names["form"] && c.Request.Method == http.MethodGet {
+		names["form"] = true
+		err = c.ShouldBindWith(ptr, binding.Form)
 	}
 
 	if ct := c.ContentType(); ct == gin.MIMEJSON && !names["json"] {

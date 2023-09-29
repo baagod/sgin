@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	Uri    = uri{}
+	Uri    = _uri{}
 	Form   = binding.Form
 	JSON   = binding.JSON
 	XML    = binding.XML
@@ -15,16 +15,16 @@ var (
 	Header = binding.Header
 )
 
-type uri struct{}
+type _uri struct{}
 
-func (uri) Name() string {
+func (_uri) Name() string {
 	return "uri"
 }
 
-func (uri) BindUri(m map[string][]string, obj any) error {
+func (_uri) BindUri(m map[string][]string, obj any) error {
 	return binding.Uri.BindUri(m, obj)
 }
 
-func (uri) Bind(*http.Request, any) error {
+func (_uri) Bind(*http.Request, any) error {
 	panic("please use BindUri()")
 }

@@ -12,6 +12,7 @@ type Router interface {
 	Group(path string, handlers ...AnyHandler) Router
 	Handle(method, path string, handlers ...AnyHandler) Router
 	Static(path, root string) Router
+	HandleError(func(*gin.Context, error))
 }
 
 type RouterGroup struct {
