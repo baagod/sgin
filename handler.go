@@ -34,8 +34,8 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 			h = &Handler{Fn: f}
 		}
 
-		fnV := reflect.ValueOf(h.Fn)
-		fnT := fnV.Type()
+		fn := reflect.ValueOf(h.Fn)
+		fnT := fn.Type()
 
 		handlers = append(handlers, func(c *gin.Context) {
 			var in []reflect.Value       // 输入参数 | 0: 上下文, 1: 输入参数
@@ -50,7 +50,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 				in = append(in, reflect.ValueOf(ctx))
 			}
 
-			if fnT.NumIn() == 2 { // 第二个参数被视为要绑定的输入参数
+			if fnT.NumIn() == 2 { // 有绑定参数
 				val, err := bindIn(c, h.Binding, fnT.In(1)) // 绑定输入参数
 				if err != nil {                             // 处理错误
 					if c.Abort(); h.Error != nil {
@@ -65,7 +65,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 				in = append(in, val)
 			}
 
-			retResponse(c, fnV.Call(in)...)
+			retResponse(c, fn.Call(in)...)
 		})
 	}
 
@@ -78,20 +78,20 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 	var names = map[string]bool{"form": false, "xml": false, "toml": false, "yaml": false, "json": false}
 
 	if bindings != nil {
-		for _, x := range bindings {
-			name := x.Name()
+		for _, b := range bindings {
+			name := b.Name()
 			names[name] = true
-			if vu, ok := x.(binding.BindingUri); ok {
+			if vu, ok := b.(binding.BindingUri); ok {
 				m := make(map[string][]string)
-				for _, v := range c.Params {
-					m[v.Key] = []string{v.Value}
+				for _, x := range c.Params {
+					m[x.Key] = []string{x.Value}
 				}
 				if err = vu.BindUri(m, ptr); err != nil {
 					return
 				}
 				continue
 			}
-			if bb, ok := x.(binding.BindingBody); ok {
+			if bb, ok := b.(binding.BindingBody); ok {
 				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
 					if err == io.EOF {
 						text := fmt.Sprintf("bind %s error: %v", name, err)
@@ -101,7 +101,7 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 				}
 				continue
 			}
-			if err = c.ShouldBindWith(ptr, x); err != nil {
+			if err = c.ShouldBindWith(ptr, b); err != nil {
 				return
 			}
 		}

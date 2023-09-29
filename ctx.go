@@ -23,37 +23,44 @@ type Ctx struct {
 	Params  gin.Params
 
 	c    *gin.Context
-	args map[string]any
+	args any
 }
 
 // ------ ARGS 参数 ------
 
-func (c *Ctx) Args() map[string]any {
-	if c.args == nil {
-		c.args = map[string]any{}
+func (c *Ctx) Args() (args map[string]any) {
+	if args, _ = c.args.(map[string]any); args != nil {
+		return
+	}
 
-		_ = c.Request.ParseMultipartForm(32 << 20)
-		for k, v := range c.Request.Form {
-			c.args[k] = v[0]
+	ct := c.Header(HeaderContentType)
+	if ct != "" && ct != gin.MIMEPOSTForm &&
+		ct != gin.MIMEMultipartPOSTForm && ct != gin.MIMEJSON {
+		return map[string]any{}
+	}
+
+	args = map[string]any{}
+	_ = c.Request.ParseMultipartForm(32 << 20)
+	for k, v := range c.Request.Form {
+		args[k] = v[0]
+	}
+
+	switch ct {
+	case gin.MIMEJSON:
+		body, ok := c.Set(gin.BodyBytesKey).([]byte)
+		if !ok {
+			if body, _ = io.ReadAll(c.Request.Body); body != nil {
+				c.Set(gin.BodyBytesKey, body)
+			}
 		}
-
-		switch c.c.ContentType() {
-		case gin.MIMEJSON:
-			body, ok := c.Set(gin.BodyBytesKey).([]byte)
-			if !ok {
-				if body, _ = io.ReadAll(c.Request.Body); body != nil {
-					c.Set(gin.BodyBytesKey, body)
-				}
-			}
-			if body != nil {
-				dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(body))
-				dec.UseNumber()
-				_ = dec.Decode(&c.args)
-			}
+		if body != nil {
+			dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(body))
+			dec.UseNumber()
+			_ = dec.Decode(&c.args)
 		}
 	}
 
-	return c.args
+	return args
 }
 
 func (c *Ctx) Arg(key string, e ...string) string {
