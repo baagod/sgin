@@ -11,7 +11,7 @@ import (
 
 type (
 	ginHandler = func(*gin.Context)
-	AnyHandler = any // gin.HandlerFunc, func(*Ctx[, *T]) <error | T> | (int, T) | (T, error)
+	AnyHandler = any // func(<*gin.Context | *Ctx>[, *T]) <error | T> | (int, T) | (T, error)
 	Handler    struct {
 		Binding []binding.Binding
 		Fn      AnyHandler
@@ -37,7 +37,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 		handlers = append(handlers, func(gc *gin.Context) {
 			c, _ := gc.Keys["_baa/sgin/ctxkey"].(*Ctx)
 			if c == nil {
-				c = NewCtx(gc, r.app)
+				c = newCtx(gc, r.app)
 				gc.Set("_baa/sgin/ctxkey", c)
 			}
 

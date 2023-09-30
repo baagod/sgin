@@ -33,7 +33,7 @@ type Ctx struct {
 	args any
 }
 
-func NewCtx(c *gin.Context, app *App) *Ctx {
+func newCtx(c *gin.Context, app *App) *Ctx {
 	return &Ctx{
 		c:       c,
 		app:     app,
