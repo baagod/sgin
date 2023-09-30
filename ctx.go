@@ -6,24 +6,42 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const (
-	FormatJSON = "JSON"
-	FormatXML  = "XML"
+	FmtJSON   = "JSON"
+	FmtXML    = "XML"
+	FmtFile   = "File"
+	FmtDown   = "Download"
+	FmtStatus = "Status"
 )
 
 type Ctx struct {
 	Request *http.Request
-	Writer  http.ResponseWriter
+	Writer  gin.ResponseWriter
 	Params  gin.Params
+	Keys    map[string]any
 
 	c    *gin.Context
+	app  *App
 	args any
+}
+
+func NewCtx(c *gin.Context, app *App) *Ctx {
+	return &Ctx{
+		c:       c,
+		app:     app,
+		Request: c.Request,
+		Writer:  c.Writer,
+		Params:  c.Params,
+		Keys:    c.Keys,
+	}
 }
 
 // ------ ARGS 参数 ------
@@ -91,24 +109,20 @@ func (c *Ctx) ArgBool(key string) bool {
 	return v != "" && v != "0"
 }
 
+func (c *Ctx) MultipartForm() (*multipart.Form, error) {
+	return c.c.MultipartForm()
+}
+
 // ------ RESPONSE 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
-	_format(c.c, body, format...)
+	c.format(body, format...)
 	return nil
 }
 
-func (c *Ctx) SendStatus(code int) error {
-	c.c.AbortWithStatus(code)
-	return nil
-}
-
-func (c *Ctx) SendFile(file string, attachment ...bool) error {
-	filename := filepath.Base(file)
-	if append(attachment, false)[0] {
-		c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
-	}
-	c.c.File(file)
+func (c *Ctx) SendHTML(name string, data any) error {
+	c.c.Abort()
+	c.c.HTML(c.StatusCode(), name, data)
 	return nil
 }
 
@@ -120,7 +134,7 @@ func (c *Ctx) Next() error {
 // ------ SET 设置 ------
 
 func (c *Ctx) Status(code int) *Ctx {
-	c.c.Status(code)
+	c.Writer.WriteHeader(code)
 	return c
 }
 
@@ -136,7 +150,7 @@ func (c *Ctx) Set(key string, value ...any) any {
 // ------ GET 获取 ------
 
 func (c *Ctx) Method() string {
-	return c.c.Request.Method
+	return c.Request.Method
 }
 
 func (c *Ctx) Header(key string, value ...string) string {
@@ -147,19 +161,19 @@ func (c *Ctx) Header(key string, value ...string) string {
 	return c.c.GetHeader(key)
 }
 
-func (c *Ctx) HeaderOrQuery(key string) (value string) {
-	if value = c.Header(key); value == "" {
-		value = c.c.Query(key)
-	}
-	return
-}
-
 func (c *Ctx) StatusCode() int {
 	return c.c.Writer.Status()
 }
 
-func (c *Ctx) Path() string {
+func (c *Ctx) Path(full ...bool) string {
+	if full != nil {
+		return c.c.FullPath()
+	}
 	return c.c.Request.URL.Path
+}
+
+func (c *Ctx) Param(key string) string {
+	return c.Params.ByName(key)
 }
 
 func (c *Ctx) IP() (ip string) {
@@ -167,4 +181,62 @@ func (c *Ctx) IP() (ip string) {
 		ip = "127.0.0.1"
 	}
 	return ip
+}
+
+func (c *Ctx) Cookie(name string) (string, error) {
+	return c.c.Cookie(name)
+}
+
+func (c *Ctx) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	c.c.SetCookie(name, value, maxAge, path, domain, secure, httpOnly)
+}
+
+func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
+	return c.c.SaveUploadedFile(file, dst)
+}
+
+func (c *Ctx) format(body any, format ...string) {
+	gc := c.c
+	if gc.Abort(); body == nil { // 停止继续处理
+		return
+	}
+
+	if st, ok := body.(int); ok {
+		gc.Status(st)
+		gc.Writer.WriteHeaderNow()
+		return
+	}
+
+	f := append(format, "")[0]
+	if f == FmtFile || f == FmtDown {
+		file := fmt.Sprint(body)
+		filename := filepath.Base(file)
+		if f == FmtDown {
+			c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+		}
+		gc.File(file)
+		return
+	}
+
+	switch body.(type) {
+	case string, error:
+		gc.String(c.StatusCode(), fmt.Sprint(body))
+		return
+	}
+
+	status := c.StatusCode()
+	accept := c.Header(HeaderAccept)
+
+	if f == FmtJSON || strings.Contains(accept, gin.MIMEJSON) { // 优先返回 JSON
+		gc.JSON(status, body)
+		return
+	} else if f == FmtXML || strings.Contains(accept, gin.MIMEXML) || strings.Contains(accept, gin.MIMEXML2) {
+		gc.XML(status, body)
+		return
+	} else if strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {
+		gc.String(status, fmt.Sprint(body))
+		return
+	}
+
+	gc.JSON(status, body) // 默认返回 JSON
 }
