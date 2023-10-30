@@ -21,8 +21,12 @@ type (
 
 func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 	for _, f := range a {
-		if v, ok := f.(ginHandler); ok {
-			handlers = append(handlers, v)
+		switch fn := f.(type) {
+		case gin.HandlerFunc:
+			handlers = append(handlers, fn)
+			continue
+		case ginHandler:
+			handlers = append(handlers, fn)
 			continue
 		}
 
