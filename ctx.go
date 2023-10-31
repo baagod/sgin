@@ -74,7 +74,8 @@ func (c *Ctx) Args() (args map[string]any) {
 		if body != nil {
 			dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(body))
 			dec.UseNumber()
-			_ = dec.Decode(&c.args)
+			_ = dec.Decode(&args)
+			c.args = args
 		}
 	}
 
