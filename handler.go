@@ -19,7 +19,7 @@ type (
 	}
 )
 
-func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
+func handle(r *Routers, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 	for _, f := range a {
 		switch fn := f.(type) {
 		case gin.HandlerFunc:
@@ -41,7 +41,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 		handlers = append(handlers, func(gc *gin.Context) {
 			c, _ := gc.Keys["_baa/sgin/ctxkey"].(*Ctx)
 			if c == nil {
-				c = newCtx(gc, r.app)
+				c = newCtx(gc, r.engine)
 				gc.Set("_baa/sgin/ctxkey", c)
 			}
 
@@ -50,9 +50,9 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 				v, err := bindIn(gc, h.Binding, fnT.In(1))
 				if err != nil { // 处理错误
 					if gc.Abort(); h.Error != nil {
-						_ = h.Error(c, &Error{Err: err})
+						_ = h.Error(c, &Error{Message: err.Error()})
 					} else {
-						_ = r.app.errHandler(c, &Error{Err: err})
+						_ = r.engine.errHandler(c, &Error{Message: err.Error()})
 					}
 					return
 				}
@@ -60,7 +60,7 @@ func handle(r *RouterGroup, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 			}
 
 			if err := response(c, fn.Call(in)); err != nil {
-				_ = r.app.errHandler(c, err)
+				_ = r.engine.errHandler(c, err)
 			}
 		})
 	}
@@ -133,9 +133,10 @@ func response(c *Ctx, ret []reflect.Value) (err error) {
 		if err, _ = first.(error); err != nil {
 			return
 		}
+
 		c.format(first)
 		return
-	} else if first != nil { // (int, T) | (T, error)
+	} else if first != nil { // (int, T) or (T, error)
 		if st, ok := first.(int); ok { // (int, T)
 			c.Status(st).format(ret[1].Interface())
 		} else { // (T, error)

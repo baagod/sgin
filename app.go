@@ -2,13 +2,14 @@ package sgin
 
 import (
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net"
-	"net/http"
+	"runtime/debug"
 )
 
-type App struct {
-	RouterGroup
+type Engine struct {
+	Routers
 	engine     *gin.Engine
 	errHandler func(*Ctx, error) error
 }
@@ -16,70 +17,69 @@ type App struct {
 type Config struct {
 	Mode         string   // gin.DebugMode | gin.ReleaseMode
 	Views        []string // filepath.Glob pattern | []file
+	Recovery     func(*Ctx, error)
 	ErrorHandler func(*Ctx, error) error
 }
 
-func defaultConfig(f ...Config) Config {
-	cfg := append(f, Config{})[0]
-	if cfg.Mode == "" {
-		cfg.Mode = gin.DebugMode
+// DefaultErrorHandler 该进程从处理程序返回错误
+func DefaultErrorHandler(c *Ctx, err error) error {
+	var e *Error
+	code := StatusInternalServerError
+	if errors.As(err, &e) {
+		code = e.Code
 	}
-	return cfg
+	c.Header(HeaderContentType, MIMETextPlainCharsetUTF8)
+	return c.Status(code).Send(err.Error())
 }
 
-func New(f ...Config) *App {
-	cfg := defaultConfig(f...)
+func New(config ...Config) *Engine {
+	cfg := append(config, Config{})[0]
 	gin.SetMode(cfg.Mode)
 
-	var engine *gin.Engine
-	if gin.SetMode(cfg.Mode); cfg.Mode == gin.DebugMode {
-		engine = gin.Default()
-	} else {
-		engine = gin.New()
-	}
+	e := &Engine{engine: gin.New()}
+	e.Routers = Routers{engine: e, grp: &e.engine.RouterGroup, root: true}
 
 	if views := len(cfg.Views); views > 0 {
 		if views == 1 {
-			engine.LoadHTMLGlob(cfg.Views[0])
+			e.engine.LoadHTMLGlob(cfg.Views[0])
 		} else {
-			engine.LoadHTMLFiles(cfg.Views...)
+			e.engine.LoadHTMLFiles(cfg.Views...)
 		}
 	}
 
-	app := &App{
-		engine:      engine,
-		RouterGroup: RouterGroup{grp: &engine.RouterGroup, root: true},
-		errHandler: func(c *Ctx, err error) error {
-			code := http.StatusInternalServerError
-
-			var e *Error
-			if errors.As(err, &e) && e.Code != 0 {
-				code = e.Code
-			}
-
-			return c.Status(code).Send(err)
-		},
+	if e.errHandler = cfg.ErrorHandler; e.errHandler == nil {
+		e.errHandler = DefaultErrorHandler
 	}
 
-	app.RouterGroup.app = app
-	if cfg.ErrorHandler != nil {
-		app.errHandler = cfg.ErrorHandler
+	if cfg.Recovery == nil {
+		e.Use(func(c *Ctx) error {
+			defer func() {
+				if err := recover(); err != nil {
+					err = fmt.Errorf("panic recovered: %v\n%s\n", err, debug.Stack())
+					_ = c.Send(ErrInternalServerError)
+					cfg.Recovery(c, err.(error))
+				}
+			}()
+			return c.Next()
+		})
+	} else {
+		e.engine.Use(gin.Recovery())
 	}
 
-	return app
+	return e
 }
 
-func (app *App) Routes() gin.RoutesInfo {
-	return app.engine.Routes()
+func (e *Engine) Routes() gin.RoutesInfo {
+	return e.engine.Routes()
 }
 
-func (app *App) Run(addr string, certAndKeyFile ...string) error {
+func (e *Engine) Run(addr string, certAndKeyFile ...string) error {
 	if certAndKeyFile != nil {
-		return app.engine.RunTLS(addr, certAndKeyFile[0], certAndKeyFile[1])
+		return e.engine.RunTLS(addr, certAndKeyFile[0], certAndKeyFile[1])
 	}
-	return app.engine.Run(addr)
+	return e.engine.Run(addr)
 }
 
-func (app *App) RunListener(listener net.Listener) error {
-	return app.engine.RunListener(listener)
+func (e *Engine) RunListener(listener net.Listener) error {
+	return e.engine.RunListener(listener)
 }

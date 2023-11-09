@@ -28,15 +28,15 @@ type Ctx struct {
 	Params  gin.Params
 	Keys    map[string]any
 
-	c    *gin.Context
-	app  *App
-	args any
+	c      *gin.Context
+	engine *Engine
+	args   any
 }
 
-func newCtx(c *gin.Context, app *App) *Ctx {
+func newCtx(c *gin.Context, app *Engine) *Ctx {
 	return &Ctx{
 		c:       c,
-		app:     app,
+		engine:  app,
 		Request: c.Request,
 		Writer:  c.Writer,
 		Params:  c.Params,
@@ -162,6 +162,13 @@ func (c *Ctx) Header(key string, value ...string) string {
 	return c.c.GetHeader(key)
 }
 
+func (c *Ctx) HeaderOrQuery(key string) (value string) {
+	if value = c.c.GetHeader(key); value == "" {
+		value = c.c.Query(key)
+	}
+	return value
+}
+
 func (c *Ctx) StatusCode() int {
 	return c.c.Writer.Status()
 }
@@ -208,30 +215,33 @@ func (c *Ctx) format(body any, format ...string) {
 		return
 	}
 
-	f := append(format, "")[0]
-	if f == FmtFile || f == FmtDown {
+	fmtStr := append(format, "")[0]
+	if fmtStr == FmtFile || fmtStr == FmtDown {
 		file := fmt.Sprint(body)
 		filename := filepath.Base(file)
-		if f == FmtDown {
+		if fmtStr == FmtDown {
 			c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
 		}
 		gc.File(file)
 		return
 	}
 
-	switch body.(type) {
-	case string, error:
-		gc.String(c.StatusCode(), fmt.Sprint(body))
+	switch b := body.(type) {
+	case string:
+		gc.String(c.StatusCode(), b)
+		return
+	case error:
+		_ = c.engine.errHandler(c, b)
 		return
 	}
 
 	status := c.StatusCode()
 	accept := c.Header(HeaderAccept)
 
-	if f == FmtJSON || strings.Contains(accept, gin.MIMEJSON) { // 优先返回 JSON
+	if fmtStr == FmtJSON || strings.Contains(accept, gin.MIMEJSON) { // 优先返回 JSON
 		gc.JSON(status, body)
 		return
-	} else if f == FmtXML || strings.Contains(accept, gin.MIMEXML) || strings.Contains(accept, gin.MIMEXML2) {
+	} else if fmtStr == FmtXML || strings.Contains(accept, gin.MIMEXML) || strings.Contains(accept, gin.MIMEXML2) {
 		gc.XML(status, body)
 		return
 	} else if strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {

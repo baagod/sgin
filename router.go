@@ -14,50 +14,50 @@ type Router interface {
 	Static(path, root string) Router
 }
 
-type RouterGroup struct {
-	grp  *gin.RouterGroup
-	app  *App
-	root bool
+type Routers struct {
+	grp    *gin.RouterGroup
+	engine *Engine
+	root   bool
 }
 
-func (r *RouterGroup) Use(args ...AnyHandler) Router {
+func (r *Routers) Use(args ...AnyHandler) Router {
 	r.iRouter().Use(handle(r, args...)...)
 	return r.router()
 }
 
-func (r *RouterGroup) GET(path string, handlers ...AnyHandler) Router {
+func (r *Routers) GET(path string, handlers ...AnyHandler) Router {
 	return r.Handle(http.MethodGet, path, handlers...)
 }
 
-func (r *RouterGroup) POST(path string, handlers ...AnyHandler) Router {
+func (r *Routers) POST(path string, handlers ...AnyHandler) Router {
 	return r.Handle(http.MethodPost, path, handlers...)
 }
 
-func (r *RouterGroup) Group(path string, handlers ...AnyHandler) Router {
+func (r *Routers) Group(path string, handlers ...AnyHandler) Router {
 	grp := r.grp.Group(path, handle(r, handlers...)...)
-	return &RouterGroup{grp: grp, app: r.app}
+	return &Routers{grp: grp, engine: r.engine}
 }
 
-func (r *RouterGroup) Handle(method string, path string, handlers ...AnyHandler) Router {
+func (r *Routers) Handle(method string, path string, handlers ...AnyHandler) Router {
 	r.iRouter().Handle(method, path, handle(r, handlers...)...)
 	return r.router()
 }
 
-func (r *RouterGroup) Static(path, root string) Router {
+func (r *Routers) Static(path, root string) Router {
 	r.iRouter().Static(path, root)
 	return r.router()
 }
 
-func (r *RouterGroup) iRouter() gin.IRouter {
+func (r *Routers) iRouter() gin.IRouter {
 	if r.root {
-		return r.app.engine
+		return r.engine.engine
 	}
 	return r.grp
 }
 
-func (r *RouterGroup) router() Router {
+func (r *Routers) router() Router {
 	if r.root {
-		return r.app
+		return r.engine
 	}
 	return r
 }
