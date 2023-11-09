@@ -15,7 +15,6 @@ type (
 	Handler    struct {
 		Binding []binding.Binding
 		Fn      AnyHandler
-		Error   func(*Ctx, error) error
 	}
 )
 
@@ -49,11 +48,8 @@ func handle(r *Routers, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 			if fnT.NumIn() == 2 {
 				v, err := bindIn(gc, h.Binding, fnT.In(1))
 				if err != nil { // 处理错误
-					if gc.Abort(); h.Error != nil {
-						_ = h.Error(c, &Error{Message: err.Error()})
-					} else {
-						_ = r.engine.errHandler(c, &Error{Message: err.Error()})
-					}
+					gc.Abort()
+					_ = r.engine.errHandler(c, &Error{Message: err.Error()})
 					return
 				}
 				in = append(in, v)
