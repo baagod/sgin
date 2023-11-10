@@ -25,7 +25,7 @@ type Config struct {
 func DefaultErrorHandler(c *Ctx, err error) error {
 	var e *Error
 	code := StatusInternalServerError
-	if errors.As(err, &e) {
+	if errors.As(err, &e) && e.Code > 0 {
 		code = e.Code
 	}
 	c.Header(HeaderContentType, MIMETextPlainCharsetUTF8)
