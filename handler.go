@@ -96,9 +96,13 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 	}
 
 	ct := c.ContentType()
-	if _, ok := names["form"]; !ok && ct == "" ||
-		ct == gin.MIMEPOSTForm || ct == gin.MIMEMultipartPOSTForm {
-		err = c.ShouldBindWith(ptr, binding.Form)
+	if _, ok := names["form"]; !ok &&
+		c.Request.Method == "GET" ||
+		ct == gin.MIMEPOSTForm ||
+		ct == gin.MIMEMultipartPOSTForm {
+		if err = c.ShouldBindWith(ptr, binding.Form); c.Request.Method == "GET" {
+			return
+		}
 	}
 
 	if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
