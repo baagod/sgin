@@ -6,11 +6,12 @@ import (
 )
 
 type Response struct {
-	Event   string `json:"event"`
-	Status  int    `json:"status"`
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    any    `json:"data"`
+	Event  string `json:"event"`
+	Status int    `json:"status"`
+	Code   int    `json:"code"`
+	Count  int    `json:"count"`
+	Msg    string `json:"msg"`
+	Data   any    `json:"data"`
 }
 
 func (r *Response) WithStatus(status int) *Response {
@@ -29,11 +30,11 @@ func (r *Response) WithCode(code any) *Response {
 	return r
 }
 
-func (r *Response) WithMessage(message any) *Response {
+func (r *Response) WithMsg(message any) *Response {
 	if r == nil {
-		return &Response{Message: fmt.Sprint(message)}
+		return &Response{Msg: fmt.Sprint(message)}
 	}
-	r.Message = fmt.Sprint(message)
+	r.Msg = fmt.Sprint(message)
 	return r
 }
 
@@ -42,6 +43,14 @@ func (r *Response) WithData(data any) *Response {
 		return &Response{Data: data}
 	}
 	r.Data = data
+	return r
+}
+
+func (r *Response) WithCount(count int) *Response {
+	if r == nil {
+		return &Response{Count: count}
+	}
+	r.Count = count
 	return r
 }
 
