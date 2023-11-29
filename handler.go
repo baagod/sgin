@@ -100,7 +100,7 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 		c.Request.Method == "GET" ||
 		ct == gin.MIMEPOSTForm ||
 		ct == gin.MIMEMultipartPOSTForm {
-		if err = c.ShouldBindWith(ptr, binding.Form); c.Request.Method == "GET" {
+		if err = c.ShouldBind(ptr); c.Request.Method == "GET" {
 			return
 		}
 	}
