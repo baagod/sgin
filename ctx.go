@@ -66,13 +66,7 @@ func (c *Ctx) Args() (args map[string]any) {
 
 	switch ct {
 	case gin.MIMEJSON:
-		body, ok := c.Set(gin.BodyBytesKey).([]byte)
-		if !ok {
-			if body, _ = io.ReadAll(c.Request.Body); body != nil {
-				c.Set(gin.BodyBytesKey, body)
-			}
-		}
-		if body != nil {
+		if body := c.RawBody(); body != nil {
 			dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(body))
 			dec.UseNumber()
 			_ = dec.Decode(&args)
