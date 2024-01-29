@@ -134,7 +134,8 @@ func (c *Ctx) Status(code int) *Ctx {
 	return c
 }
 
-func (c *Ctx) Set(key string, value ...any) any {
+// Locals 设置或将值存储在上下文中。
+func (c *Ctx) Locals(key string, value ...any) any {
 	if value != nil {
 		c.c.Set(key, value[0])
 		return nil
@@ -165,10 +166,10 @@ func (c *Ctx) HeaderOrQuery(key string) (value string) {
 }
 
 func (c *Ctx) RawBody() []byte {
-	body, ok := c.Set(gin.BodyBytesKey).([]byte)
+	body, ok := c.Locals(gin.BodyBytesKey).([]byte)
 	if !ok {
 		if body, _ = io.ReadAll(c.Request.Body); body != nil {
-			c.Set(gin.BodyBytesKey, body)
+			c.Locals(gin.BodyBytesKey, body)
 		}
 	}
 	return body
