@@ -3,8 +3,6 @@ package sgin
 import (
 	"bytes"
 	"fmt"
-	"github.com/bytedance/sonic"
-	"github.com/gin-gonic/gin"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -12,6 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/bytedance/sonic"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -167,6 +168,20 @@ func (c *Ctx) HeaderOrQuery(key string) (value string) {
 		value = c.c.Query(key)
 	}
 	return value
+}
+
+func (c *Ctx) RawBody() []byte {
+	body, ok := c.Set(gin.BodyBytesKey).([]byte)
+	if !ok {
+		if body, _ = io.ReadAll(c.Request.Body); body != nil {
+			c.Set(gin.BodyBytesKey, body)
+		}
+	}
+	return body
+}
+
+func (c *Ctx) GinCtx() *gin.Context {
+	return c.c
 }
 
 func (c *Ctx) StatusCode() int {
