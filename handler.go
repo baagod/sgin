@@ -3,10 +3,12 @@ package sgin
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"io"
 	"reflect"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 )
 
 type (
@@ -43,7 +45,6 @@ func handle(r *Routers, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 				c = newCtx(gc, r.engine)
 				gc.Set("_baa/sgin/ctxkey", c)
 			}
-
 			in := []reflect.Value{reflect.ValueOf(c)}
 			if fnT.NumIn() == 2 {
 				v, err := bindIn(gc, h.Binding, fnT.In(1))
@@ -65,7 +66,8 @@ func handle(r *Routers, a ...AnyHandler) (handlers []gin.HandlerFunc) {
 }
 
 func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v reflect.Value, err error) {
-	v = reflect.New(T.Elem()) // *T-value
+	elem := T.Elem()      //  T: struct
+	v = reflect.New(elem) // *T: object
 	ptr := v.Interface()
 	var names = map[string]bool{}
 
@@ -96,23 +98,30 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 	}
 
 	ct := c.ContentType()
-	if _, ok := names["form"]; !ok &&
-		c.Request.Method == "GET" ||
-		ct == gin.MIMEPOSTForm ||
-		ct == gin.MIMEMultipartPOSTForm {
-		if err = c.ShouldBind(ptr); c.Request.Method == "GET" {
-			return
+	if _, ok := names["form"]; !ok && c.Request.Method == "GET" || ct == gin.MIMEPOSTForm || ct == gin.MIMEMultipartPOSTForm {
+		err = c.ShouldBind(ptr)
+	} else {
+		if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
+			err = c.ShouldBindBodyWith(ptr, binding.JSON)
+		} else if _, ok = names["xml"]; !ok && ct == gin.MIMEXML || ct == gin.MIMEXML2 {
+			err = c.ShouldBindBodyWith(ptr, binding.XML)
+		} else if _, ok = names["toml"]; !ok && ct == gin.MIMETOML {
+			err = c.ShouldBindBodyWith(ptr, binding.TOML)
+		} else if _, ok = names["yaml"]; !ok && ct == gin.MIMEYAML {
+			err = c.ShouldBindBodyWith(ptr, binding.YAML)
 		}
 	}
 
-	if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
-		err = c.ShouldBindBodyWith(ptr, binding.JSON)
-	} else if _, ok = names["xml"]; !ok && ct == gin.MIMEXML || ct == gin.MIMEXML2 {
-		err = c.ShouldBindBodyWith(ptr, binding.XML)
-	} else if _, ok = names["toml"]; !ok && ct == gin.MIMETOML {
-		err = c.ShouldBindBodyWith(ptr, binding.TOML)
-	} else if _, ok = names["yaml"]; !ok && ct == gin.MIMEYAML {
-		err = c.ShouldBindBodyWith(ptr, binding.YAML)
+	var vErrs validator.ValidationErrors
+	if errors.As(err, &vErrs) {
+		for _, e := range vErrs {
+			if field, ok := elem.FieldByName(e.Field()); ok {
+				if failtip := field.Tag.Get("failtip"); failtip != "" {
+					err = errors.New(failtip)
+					break
+				}
+			}
+		}
 	}
 
 	return
