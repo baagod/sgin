@@ -2,10 +2,11 @@ package sgin
 
 import (
 	"errors"
-	"fmt"
-	"github.com/gin-gonic/gin"
 	"net"
-	"runtime/debug"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/ztrue/tracerr"
 )
 
 type Engine struct {
@@ -17,7 +18,7 @@ type Engine struct {
 type Config struct {
 	Mode         string   // gin.DebugMode | gin.ReleaseMode
 	Views        []string // filepath.Glob pattern | []file
-	Recovery     func(*Ctx, error)
+	Recovery     func(*Ctx, string)
 	ErrorHandler func(*Ctx, error) error
 }
 
@@ -51,13 +52,14 @@ func New(config ...Config) *Engine {
 		e.errHandler = DefaultErrorHandler
 	}
 
-	if cfg.Recovery == nil {
+	if cfg.Recovery != nil {
 		e.Use(func(c *Ctx) error {
 			defer func() {
 				if err := recover(); err != nil {
-					err = fmt.Errorf("panic recovered: %v\n%s\n", err, debug.Stack())
 					_ = c.Send(ErrInternalServerError)
-					cfg.Recovery(c, err.(error))
+					trace := tracerr.SprintSource(tracerr.Wrap(err.(error)), 3)
+					trace = strings.ReplaceAll(trace, "\t", "    ")
+					cfg.Recovery(c, trace)
 				}
 			}()
 			return c.Next()
