@@ -58,8 +58,7 @@ func New(config ...Config) *Engine {
 				if err := recover(); err != nil {
 					_ = c.Send(ErrInternalServerError)
 					trace := tracerr.SprintSource(tracerr.Wrap(err.(error)), 3)
-					trace = strings.ReplaceAll(trace, "\t", "    ")
-					cfg.Recovery(c, trace)
+					cfg.Recovery(c, strings.ReplaceAll(trace, "\t", "    "))
 				}
 			}()
 			return c.Next()
