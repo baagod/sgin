@@ -2,11 +2,9 @@ package sgin
 
 import (
 	"errors"
-	"net"
-	"strings"
-
 	"github.com/gin-gonic/gin"
 	"github.com/ztrue/tracerr"
+	"net"
 )
 
 type Engine struct {
@@ -34,34 +32,33 @@ func DefaultErrorHandler(c *Ctx, err error) error {
 }
 
 func New(config ...Config) *Engine {
-	cfg := append(config, Config{})[0]
-	gin.SetMode(cfg.Mode)
+	f := append(config, Config{})[0]
+	gin.SetMode(f.Mode)
 
 	e := &Engine{engine: gin.New()}
 	e.Routers = Routers{engine: e, grp: &e.engine.RouterGroup, root: true}
 
-	if views := len(cfg.Views); views > 0 {
+	if views := len(f.Views); views > 0 {
 		if views == 1 {
-			e.engine.LoadHTMLGlob(cfg.Views[0])
+			e.engine.LoadHTMLGlob(f.Views[0])
 		} else {
-			e.engine.LoadHTMLFiles(cfg.Views...)
+			e.engine.LoadHTMLFiles(f.Views...)
 		}
 	}
 
-	if e.errHandler = cfg.ErrorHandler; e.errHandler == nil {
+	if e.errHandler = f.ErrorHandler; e.errHandler == nil {
 		e.errHandler = DefaultErrorHandler
 	}
 
-	if cfg.Recovery != nil {
-		e.Use(func(c *Ctx) error {
+	if f.Recovery != nil {
+		e.Use(func(ctx *Ctx) error {
 			defer func() {
 				if err := recover(); err != nil {
-					_ = c.Send(ErrInternalServerError)
-					trace := tracerr.SprintSource(tracerr.Wrap(err.(error)), 3)
-					cfg.Recovery(c, strings.ReplaceAll(trace, "\t", "    "))
+					_ = ctx.Send(ErrInternalServerError)
+					f.Recovery(ctx, tracerr.Sprint(tracerr.Wrap(err.(error))))
 				}
 			}()
-			return c.Next()
+			return ctx.Next()
 		})
 	} else {
 		e.engine.Use(gin.Recovery())
