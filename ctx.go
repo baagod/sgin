@@ -3,6 +3,7 @@ package sgin
 import (
 	"bytes"
 	"fmt"
+	"github.com/clbanning/mxj/v2"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -29,51 +30,62 @@ type Ctx struct {
 	Params  gin.Params
 	Keys    map[string]any
 
-	c      *gin.Context
+	ctx    *gin.Context
 	engine *Engine
 	args   any
 }
 
-func newCtx(c *gin.Context, app *Engine) *Ctx {
+func newCtx(ctx *gin.Context, e *Engine) *Ctx {
 	return &Ctx{
-		c:       c,
-		engine:  app,
-		Request: c.Request,
-		Writer:  c.Writer,
-		Params:  c.Params,
-		Keys:    c.Keys,
+		ctx:     ctx,
+		engine:  e,
+		Request: ctx.Request,
+		Writer:  ctx.Writer,
+		Params:  ctx.Params,
+		Keys:    ctx.Keys,
 	}
 }
 
 // ------ ARGS 参数 ------
 
 func (c *Ctx) Args() (args map[string]any) {
+	// 已经解析过请求数据
 	if args, _ = c.args.(map[string]any); args != nil {
 		return
 	}
 
-	ct := c.Header(HeaderContentType)
-	if ct != "" && ct != gin.MIMEPOSTForm &&
-		ct != gin.MIMEMultipartPOSTForm && ct != gin.MIMEJSON {
-		return map[string]any{}
-	}
-
 	args = map[string]any{}
-	_ = c.Request.ParseMultipartForm(32 << 20)
-	for k, v := range c.Request.Form {
-		args[k] = v[0]
+	ct := c.Header(HeaderContentType)
+
+	if ct == "" || c.Request.Method == "GET" || ct == gin.MIMEPOSTForm {
+		_ = c.Request.ParseForm()
+		for k, v := range c.Request.Form {
+			args[k] = v[0]
+		}
+	} else if strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
+		if form, err := c.ctx.MultipartForm(); err == nil {
+			for k, v := range form.Value {
+				args[k] = v[0]
+			}
+			for k, v := range form.File {
+				args[k] = v[0]
+			}
+		}
 	}
 
 	switch ct {
 	case gin.MIMEJSON:
-		if body := c.RawBody(); body != nil {
-			dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(body))
-			dec.UseNumber()
-			_ = dec.Decode(&args)
-			c.args = args
+		r := bytes.NewReader(c.RawBody())
+		dec := sonic.ConfigDefault.NewDecoder(r)
+		dec.UseNumber()
+		_ = dec.Decode(&args)
+	case gin.MIMEXML, gin.MIMEXML2:
+		if m, _ := mxj.NewMapXml(c.RawBody()); m != nil {
+			args = m
 		}
 	}
 
+	c.args = args
 	return args
 }
 
@@ -105,10 +117,6 @@ func (c *Ctx) ArgBool(key string) bool {
 	return v != "" && v != "0"
 }
 
-func (c *Ctx) MultipartForm() (*multipart.Form, error) {
-	return c.c.MultipartForm()
-}
-
 // ------ RESPONSE 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
@@ -117,13 +125,13 @@ func (c *Ctx) Send(body any, format ...string) error {
 }
 
 func (c *Ctx) SendHTML(name string, data any) error {
-	c.c.Abort()
-	c.c.HTML(c.StatusCode(), name, data)
+	c.ctx.Abort()
+	c.ctx.HTML(c.StatusCode(), name, data)
 	return nil
 }
 
 func (c *Ctx) Next() error {
-	c.c.Next()
+	c.ctx.Next()
 	return nil
 }
 
@@ -137,10 +145,10 @@ func (c *Ctx) Status(code int) *Ctx {
 // Locals 设置或将值存储在上下文中。
 func (c *Ctx) Locals(key string, value ...any) any {
 	if value != nil {
-		c.c.Set(key, value[0])
+		c.ctx.Set(key, value[0])
 		return nil
 	}
-	v, _ := c.c.Get(key)
+	v, _ := c.ctx.Get(key)
 	return v
 }
 
@@ -152,22 +160,21 @@ func (c *Ctx) Method() string {
 
 func (c *Ctx) Header(key string, value ...string) string {
 	if value != nil {
-		c.c.Header(key, value[0])
+		c.ctx.Header(key, value[0])
 		return ""
 	}
-	return c.c.GetHeader(key)
+	return c.ctx.GetHeader(key)
 }
 
 func (c *Ctx) HeaderOrQuery(key string) (value string) {
-	if value = c.c.GetHeader(key); value == "" {
-		value = c.c.Query(key)
+	if value = c.ctx.GetHeader(key); value == "" {
+		value = c.ctx.Query(key)
 	}
 	return value
 }
 
-func (c *Ctx) RawBody() []byte {
-	body, ok := c.Locals(gin.BodyBytesKey).([]byte)
-	if !ok {
+func (c *Ctx) RawBody() (body []byte) {
+	if body, _ = c.Locals(gin.BodyBytesKey).([]byte); body == nil {
 		if body, _ = io.ReadAll(c.Request.Body); body != nil {
 			c.Locals(gin.BodyBytesKey, body)
 		}
@@ -176,18 +183,18 @@ func (c *Ctx) RawBody() []byte {
 }
 
 func (c *Ctx) GinCtx() *gin.Context {
-	return c.c
+	return c.ctx
 }
 
 func (c *Ctx) StatusCode() int {
-	return c.c.Writer.Status()
+	return c.ctx.Writer.Status()
 }
 
 func (c *Ctx) Path(full ...bool) string {
 	if full != nil {
-		return c.c.FullPath()
+		return c.ctx.FullPath()
 	}
-	return c.c.Request.URL.Path
+	return c.ctx.Request.URL.Path
 }
 
 func (c *Ctx) Param(key string) string {
@@ -195,26 +202,26 @@ func (c *Ctx) Param(key string) string {
 }
 
 func (c *Ctx) IP() (ip string) {
-	if ip = c.c.ClientIP(); ip == "::1" {
+	if ip = c.ctx.ClientIP(); ip == "::1" {
 		ip = "127.0.0.1"
 	}
 	return ip
 }
 
 func (c *Ctx) Cookie(name string) (string, error) {
-	return c.c.Cookie(name)
+	return c.ctx.Cookie(name)
 }
 
 func (c *Ctx) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
-	c.c.SetCookie(name, value, maxAge, path, domain, secure, httpOnly)
+	c.ctx.SetCookie(name, value, maxAge, path, domain, secure, httpOnly)
 }
 
 func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
-	return c.c.SaveUploadedFile(file, dst)
+	return c.ctx.SaveUploadedFile(file, dst)
 }
 
 func (c *Ctx) format(body any, format ...string) {
-	gc := c.c
+	gc := c.ctx
 	if gc.Abort(); body == nil { // 停止继续处理
 		return
 	}

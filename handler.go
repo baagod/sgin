@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -98,7 +99,10 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 	}
 
 	ct := c.ContentType()
-	if _, ok := names["form"]; !ok && c.Request.Method == "GET" || ct == gin.MIMEPOSTForm || ct == gin.MIMEMultipartPOSTForm {
+	if _, ok := names["form"]; !ok &&
+		c.Request.Method == "GET" ||
+		ct == gin.MIMEPOSTForm ||
+		strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
 		err = c.ShouldBind(ptr)
 	} else {
 		if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
