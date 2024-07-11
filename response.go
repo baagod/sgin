@@ -2,16 +2,18 @@ package sgin
 
 import (
 	"fmt"
+
 	"github.com/spf13/cast"
 )
 
 type Response struct {
-	Event  string `json:"event"`
-	Status int    `json:"status"`
-	Code   int    `json:"code"`
-	Count  int    `json:"count"`
-	Msg    string `json:"msg"`
-	Data   any    `json:"data"`
+	Event   string `json:"event"`
+	Status  int    `json:"status"`
+	Code    int    `json:"code"`
+	Count   int    `json:"count"`
+	Message string `json:"msg"`
+	Data    any    `json:"data"`
+	Err     error  `json:"-"`
 }
 
 func (r *Response) WithStatus(status int) *Response {
@@ -32,9 +34,9 @@ func (r *Response) WithCode(code any) *Response {
 
 func (r *Response) WithMsg(message any) *Response {
 	if r == nil {
-		return &Response{Msg: fmt.Sprint(message)}
+		return &Response{Message: fmt.Sprint(message)}
 	}
-	r.Msg = fmt.Sprint(message)
+	r.Message = fmt.Sprint(message)
 	return r
 }
 
@@ -61,5 +63,49 @@ func (r *Response) OK(data ...any) *Response {
 	}
 	r.Status = 1
 	r.Data = data[0]
+	return r
+}
+
+func (r Response) SetData(data ...any) Response {
+	if r.Err != nil {
+		r.Message = r.Err.Error()
+	} else {
+		if r.Status = 1; data != nil {
+			r.Data = data[0]
+		}
+	}
+
+	return r
+}
+
+func (r Response) Error(format any, a ...any) Response {
+	if format != nil {
+		if r.Status = 0; a != nil {
+			r.Message = fmt.Sprintf(format.(string), a...)
+		} else {
+			r.Message = fmt.Sprint(format)
+		}
+	}
+	return r
+}
+
+func (r Response) Msg(format any, a ...any) Response {
+	if format != nil {
+		if a != nil {
+			r.Message = fmt.Sprintf(format.(string), a...)
+		} else {
+			r.Message = fmt.Sprint(format)
+		}
+	}
+	return r
+}
+
+func (r Response) SetCount(count int) Response {
+	r.Count = count
+	return r
+}
+
+func (r Response) SetCode(code int) Response {
+	r.Code = code
 	return r
 }
