@@ -2,9 +2,10 @@ package sgin
 
 import (
 	"errors"
+	"net"
+
 	"github.com/gin-gonic/gin"
 	"github.com/ztrue/tracerr"
-	"net"
 )
 
 type Engine struct {
@@ -23,12 +24,16 @@ type Config struct {
 // DefaultErrorHandler 该进程从处理程序返回错误
 func DefaultErrorHandler(c *Ctx, err error) error {
 	var e *Error
-	code := StatusInternalServerError
-	if errors.As(err, &e) && e.Code > 0 {
-		code = e.Code
+	statusCode := StatusInternalServerError
+
+	if errors.As(err, &e) && e.Code > 0 { // 如果是 *Error 错误
+		statusCode = e.Code
+	} else if stc := c.StatusCode(); stc != 200 && stc != 0 {
+		statusCode = stc
 	}
+
 	c.Header(HeaderContentType, MIMETextPlainCharsetUTF8)
-	return c.Status(code).Send(err.Error())
+	return c.Status(statusCode).Send(err.Error())
 }
 
 func New(config ...Config) *Engine {

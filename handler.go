@@ -2,124 +2,68 @@ package sgin
 
 import (
 	"errors"
-	"fmt"
-	"io"
 	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
-type (
-	ginHandler = func(*gin.Context)
-	AnyHandler = any // func(<*gin.Context | *Ctx>[, *T]) <error | T> | (int, T) | (T, error)
-	Handler    struct {
-		Binding []binding.Binding
-		Fn      AnyHandler
-	}
-)
+type Handler any // func(*Ctx[, T]) -> T | (int, T) | (T, error)
 
-func handle(r *Routers, a ...AnyHandler) (handlers []gin.HandlerFunc) {
+func handle(r *Routers, a ...Handler) (handlers []gin.HandlerFunc) {
 	for _, f := range a {
-		switch fn := f.(type) {
-		case gin.HandlerFunc:
-			handlers = append(handlers, fn)
-			continue
-		case ginHandler:
-			handlers = append(handlers, fn)
-			continue
-		}
+		handler := reflect.ValueOf(f)
+		handlerType := handler.Type()
 
-		var h *Handler
-		if h, _ = f.(*Handler); h == nil {
-			h = &Handler{Fn: f}
-		}
-
-		fn := reflect.ValueOf(h.Fn)
-		fnT := fn.Type()
-
-		handlers = append(handlers, func(gc *gin.Context) {
-			c, _ := gc.Keys["_baa/sgin/ctxkey"].(*Ctx)
-			if c == nil {
-				c = newCtx(gc, r.engine)
-				gc.Set("_baa/sgin/ctxkey", c)
+		handlers = append(handlers, func(ginCtx *gin.Context) {
+			ctx, _ := ginCtx.Keys["_baa/sgin/ctxkey"].(*Ctx)
+			if ctx == nil {
+				ctx = newCtx(ginCtx, r.engine)      // 创建 *sgin.Ctx
+				ginCtx.Set("_baa/sgin/ctxkey", ctx) // 保存 *sgin.Ctx
 			}
-			in := []reflect.Value{reflect.ValueOf(c)}
-			if fnT.NumIn() == 2 {
-				v, err := bindIn(gc, h.Binding, fnT.In(1))
-				if err != nil { // 处理错误
-					gc.Abort()
-					_ = r.engine.errHandler(c, &Error{Message: err.Error()})
+
+			inputParam := []reflect.Value{reflect.ValueOf(ctx)} // *Ctx[, T]
+			if handlerType.NumIn() == 2 {                       // 如果处理函数有两个参数
+				value, err := bind(ginCtx, handlerType.In(1)) // 创建并绑定请求结构体
+				if err != nil {                               // 处理错误
+					ginCtx.Abort()                                             // 停止请求链
+					_ = r.engine.errHandler(ctx, &Error{Message: err.Error()}) // 返回错误
 					return
 				}
-				in = append(in, v)
+				inputParam = append(inputParam, value)
 			}
 
-			if err := response(c, fn.Call(in)); err != nil {
-				_ = r.engine.errHandler(c, err)
-			}
+			response(ctx, handler.Call(inputParam))
 		})
 	}
 
 	return
 }
 
-func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v reflect.Value, err error) {
-	elem := T.Elem()      //  T: struct
-	v = reflect.New(elem) // *T: object
-	ptr := v.Interface()
-	var names = map[string]bool{}
-
-	if bindings != nil {
-		for _, b := range bindings {
-			name := b.Name()
-			names[name] = true
-			if vu, ok := b.(binding.BindingUri); ok {
-				m := make(map[string][]string)
-				for _, x := range c.Params {
-					m[x.Key] = []string{x.Value}
-				}
-				if err = vu.BindUri(m, ptr); err != nil {
-					return
-				}
-			} else if bb, ok := b.(binding.BindingBody); ok {
-				if err = c.ShouldBindBodyWith(ptr, bb); err != nil {
-					if err == io.EOF {
-						text := fmt.Sprintf("bind %s error: %v", name, err)
-						err = errors.New(text)
-					}
-					return
-				}
-			} else if err = c.ShouldBindWith(ptr, b); err != nil {
-				return
-			}
-		}
+// bind 绑定请求结构体
+func bind(c *gin.Context, T reflect.Type) (value reflect.Value, err error) {
+	isStructPtr := T.Kind() == reflect.Ptr
+	if isStructPtr {
+		T = T.Elem()
 	}
 
+	value = reflect.New(T)   // 创建结构体 *T 的 reflect.Value
+	ptr := value.Interface() // 结构体指针
 	ct := c.ContentType()
-	if _, ok := names["form"]; !ok &&
-		c.Request.Method == "GET" ||
-		ct == gin.MIMEPOSTForm ||
-		strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
+
+	if c.Request.Method == "GET" || ct == gin.MIMEPOSTForm || strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
 		err = c.ShouldBind(ptr)
-	} else {
-		if _, ok := names["json"]; !ok && ct == gin.MIMEJSON {
-			err = c.ShouldBindBodyWith(ptr, binding.JSON)
-		} else if _, ok = names["xml"]; !ok && ct == gin.MIMEXML || ct == gin.MIMEXML2 {
-			err = c.ShouldBindBodyWith(ptr, binding.XML)
-		} else if _, ok = names["toml"]; !ok && ct == gin.MIMETOML {
-			err = c.ShouldBindBodyWith(ptr, binding.TOML)
-		} else if _, ok = names["yaml"]; !ok && ct == gin.MIMEYAML {
-			err = c.ShouldBindBodyWith(ptr, binding.YAML)
-		}
+	} else if ct == gin.MIMEJSON {
+		err = c.ShouldBindJSON(ptr)
+	} else if ct == gin.MIMEXML {
+		err = c.ShouldBindXML(ptr)
 	}
 
 	var vErrs validator.ValidationErrors
 	if errors.As(err, &vErrs) {
 		for _, e := range vErrs {
-			if field, ok := elem.FieldByName(e.Field()); ok {
+			if field, ok := T.FieldByName(e.Field()); ok {
 				if failtip := field.Tag.Get("failtip"); failtip != "" {
 					err = errors.New(failtip)
 					break
@@ -128,35 +72,36 @@ func bindIn(c *gin.Context, bindings []binding.Binding, T reflect.Type) (v refle
 		}
 	}
 
+	if !isStructPtr {
+		value = value.Elem()
+	}
+
 	return
 }
 
-func response(c *Ctx, ret []reflect.Value) (err error) {
-	if ret == nil {
+// response 返回响应 (处理函数的给定返回值)
+// 返回值可以为：T | (int, T) | (T, error)
+func response(c *Ctx, result []reflect.Value) {
+	if result == nil { // 没有返回值
 		return
 	}
 
-	first := ret[0].Interface()
-	if first == nil {
-		return
-	}
-
-	if len(ret) == 1 { // [error | T]
-		//goland:noinspection GoTypeAssertionOnErrors
-		if err, _ = first.(error); err != nil {
-			return
-		}
-
+	first := result[0].Interface() // 第一个返回值
+	if len(result) == 1 {
 		c.format(first)
 		return
-	} else if first != nil { // (int, T) or (T, error)
-		if st, ok := first.(int); ok { // (int, T)
-			c.Status(st).format(ret[1].Interface())
-		} else { // (T, error)
-			c.format(first)
-		}
+	}
+
+	second := result[1].Interface()        // 第二个返回值
+	if statusCode, ok := first.(int); ok { // (int, T)
+		c.Status(statusCode).format(second)
 		return
 	}
 
-	return ret[1].Interface().(error) // (T, error)
+	if err, ok := second.(error); ok { // (T, error)
+		c.format(err)
+		return
+	}
+
+	c.format(first) // 没有错误，返回 T
 }

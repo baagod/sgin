@@ -2,95 +2,123 @@
 
 这是一个 [gin](https://github.com/gin-gonic/gin) 的魔改版本，旨在让其更加简单。
 
-## 介绍
+`sgin` 拥有一个可选的默认配置。
 
 ```go
 r := sgin.New(sgin.Config{
     Mode: gin.DebugMode, // 默认值
-    // 相当于 LoadHTMLGlob() 或 LoadHTMLFiles()
-    Views: []string{"./views/index.tmpl"},
-    ErrorHandler: func(c *sgin.Ctx, err error) { // 默认
-      code := http.StatusInternalServerError
-      var e *Error
-      if errors.As(err, &e) && e.Code != 0 {
-          code = e.Code
-      }
-      return c.Status(code).Send(err)
+    ErrorHandler: func(c *sgin.Ctx, err error) { // 默认错误处理
+        var e *Error
+        code := StatusInternalServerError
+    
+        if errors.As(err, &e) && e.Code > 0 { // 如果是 *Error
+            code = e.Code
+        } else if stc := c.StatusCode(); stc != 200 && stc != 0 {
+            code = stc
+        }
+    
+        return c.Status(code).Send(err.Error())
     }
 })
 
 r.Run(":8080")
 ```
 
-配置是可选的，可传可不传。
+## 处理方法
 
-### 处理方法
+`sgin` 主要修改了原生处理函数，处理函数的签名变成了：`func(*sgin.Ctx[, T]) T | (int, T) | (T, error)` 。
 
-处理方法的签名是：`gin.HandlerFunc, func(*Ctx[, *T]) <error | T> | (int, T) | (T, error)`。
-处理方法的第二个参数是可选的，它接收任意请求传来的数据。用法如下：
+### 接收请求参数
+
+其中跟在 `*sgin.Ctx` 后面的 `T` 是可选的，它接收来自请求传递的数据。例如请求 `index?name=p1&age=10`
+，这会将查询参数绑定到结构体 `p` 中。
 
 ```go
-type Request struct {
-    Name   string `form:"name" json:"name"`
-    Age    string `form:"age" json:"age" binding:"required"`
-    Milli  string `header:"milli" json:"milli"`
-    uid    string `uri:"uid" json:"uri"`
-}
-
-r.Get("/index", func(c *sgin.Ctx, r *Request) error {
-    return c.Send(r) // 将 r 当做响应体发送
-})
-
-r.Get("/index/v2", func(c *sgin.Ctx) (r *sgin.Response) {
-    // 返回原理与 `Send()` 方法相同
-    return &sgin.Response{Message: "OK"}
+r.Get("/index", func(c *sgin.Ctx, p struct{
+    Name string `form:"name"`
+    Age  int    `form:"age"`
+}) {
+    // p => {"p1", 10}
 })
 ```
 
-`Send(any, format ...string)` 方法会自动根据请求头 `Accept` 返回对应类型的数据，也可以指定其他类型发送，如 `sgin.FmtJSON`。
-
-当处理方法返回响应发生错误时，就会调用全局错误处理函数。以下是处理方法支持的返回类型：
-
-- `error | T`：返回一个错误或具体的响应；
-- `T`：返回任意的响应体；
-- `(int, T)`：返回状态码和响应体；
-- `(T, error)`：任意响应体，错误。
-
-此外，如果你还想要为输入绑定更多的额外参数，或是想为某方法单独处理错误：
+接收 JSON 参数，只需将标签改为 `json` (`xml` 同理)：
 
 ```go
-r.GET("/index", &sgin.Handler{
-    Binding: []binding.Binding{sgin.Uri, sgin.Header},
-    Fn: func(c *sgin.Ctx, req *Request) error {
-        return c.Send(r)
-    },
-    Error: func(c *sgin.Ctx, err error) error {
-        return c.Status(500).Send(err)
-    },
+r.Get("/index", func(c *sgin.Ctx, p struct{
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+}) {
+    // p => {"p1", 10}
 })
 ```
 
-该处理将添加 `uri` 和 `header` 参数到你的输入 ( `req` ) 中，并且在发生错误时，错误将回调到该单独错误处理中，而不会再在其他地方调用。
+### 返回响应
+
+要返回响应数据，你可以使用 `c.Send()`，或在处理函数中定义返回值（稍后介绍）。
+
+```go
+r.Get("/index", func(c *sgin.Ctx) {
+    c.Sned("Very OK")
+})
+```
+
+`Send(any, format ...string)` 方法会自动根据请求头 `Accept` 返回对应格式的数据，也可以手动指定。
+
+`Send()` 细节：
+
+- 如果发送数字，将被仅当做状态码返回。
+- 如果发送 `string` 或 `error` 将返回原字符串或 `error.Error()`。
+- 将格式传递给 `format` 参数，将返回对应类型的数据。例如 `c.Send(map[string]any{}, sgin.FormatJSON)`。
+- 如果你有状态码和错误一起返回：`c.Send(sgin.NewError(statusCode, msg))` 。
+- 当然你可以先设置状态码后发送你的数据：`c.Status(200).Send(...)`。
+
+----
+
+除了可以使用 `Send()` 返回响应数据外，还可以将其定义为处理函数的返回值，返回值类型可以为：
+
+- `T`: 任意响应体；
+- `(int, T)`: 状态码和任意响应体；
+- `(T, error)`: 响应体和错误。
+
+注意，`T` 是任意类型，通常为 `int`, `error`, `string`, `Any`，处理函数的返回值类型和使用 `Send()` 返回的数据基本是一致的。
+
+```go
+r.Get("/index", func(c *sgin.Ctx) int {
+    return 401 // 只返回状态码
+})
+
+r.Get("/index", func(c *sgin.Ctx) error {
+    return errors.New("error") // 在不指定错误状态码的情况下，状态码默认为 500。
+})
+
+r.Get("/index", func(c *sgin.Ctx) (r sgin.Response) {
+    return r.OK() // 返回任意响应
+})
+
+r.Get("/index", func(c *sgin.Ctx) (r *map[string]any, error) {
+    return nil, errors.new("test error") // 返回响应或错误
+})
+
+r.Get("/index", func(c *sgin.Ctx) (int, map[string]any) {
+    return nil, map[string]any{"msg": "test"} // 返回状态码和响应
+})
+```
 
 ## Api
 
 ### `Ctx`
 
-- `Args() map[string]any`：该方法根据不同的请求方式返回请求参数的集合；
-
-  例如有一个查询请求为 `name=xx&age=10`，调用 `Args()` 方法将返回 `{"name": "xx", "age": 10}`，同样的 POST 或 JSON
-  请求也会返回该 `map`。
-
-  这样我们就可以不再用区分是何种请求方式，直接调用 `Args()` 就能拿到你想要的数据。其他如 `ArgInt()`、`ArgBool()...`
-  方法都是该方法的快捷方式。
+- `Args() map[string]any`：返回请求参数集合，无论是 GET、POST 还是 JSON 等请求；
+- `ArgInt(key string, e ...string)` 等：将请求参数转为对应的类型；
 - `Send(any, format ...string)` 发送响应。
 - `SendHTML(string, any)` 以 `HTML` 模板作为响应发送。
-- `Set(key string, ...any) any`：设置或将值存储在上下文中。
-- `Header(key string, ...any) any`：设置或将值写入响应头中。此外 `sgin`
+- `Locals(key string, ...any) any`：设置或将值存储到上下文。
+- `Header(key string, ...any) any`：设置或写入响应头。此外 `sgin`
   定义了许多枚举来帮助你快速找到某个请求头，例如要获取内容类型：`Header(sgin.HeaderContentType)`；
 - `Status(int) *Ctx`：设置响应状态码；
 - `StatusCode() int`：获取响应状态码；
 - `Method() string`：获取请求方法；
-- `Path() string`：返回 `Request.URL.Path`；
+- `Path(full ...bool) string`：返回部分或全部请求路径；
 - `IP() string`：返回远程客户端 IP，如果是本机则返回 127.0.0.1；
-- 其他继承自 `gin.Context` 的方法。 
+- ... 其他来自 `gin.Context` 的方法。

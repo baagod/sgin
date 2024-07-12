@@ -3,7 +3,6 @@ package sgin
 import (
 	"bytes"
 	"fmt"
-	"github.com/clbanning/mxj/v2"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -12,16 +11,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/clbanning/mxj/v2"
+
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	FmtJSON   = "JSON"
-	FmtXML    = "XML"
-	FmtFile   = "File"
-	FmtDown   = "Download"
-	FmtStatus = "Status"
+	FormatJSON     = "JSON"
+	FormatXML      = "XML"
+	FormatUpload   = "Upload"
+	FormatDownload = "Download"
 )
 
 type Ctx struct {
@@ -37,8 +37,8 @@ type Ctx struct {
 
 func newCtx(ctx *gin.Context, e *Engine) *Ctx {
 	return &Ctx{
-		ctx:     ctx,
 		engine:  e,
+		ctx:     ctx,
 		Request: ctx.Request,
 		Writer:  ctx.Writer,
 		Params:  ctx.Params,
@@ -46,7 +46,7 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
 	}
 }
 
-// ------ ARGS 参数 ------
+// ------ 请求参数 ------
 
 func (c *Ctx) Args() (args map[string]any) {
 	// 已经解析过请求数据
@@ -79,7 +79,7 @@ func (c *Ctx) Args() (args map[string]any) {
 		dec := sonic.ConfigDefault.NewDecoder(r)
 		dec.UseNumber()
 		_ = dec.Decode(&args)
-	case gin.MIMEXML, gin.MIMEXML2:
+	case gin.MIMEXML:
 		if m, _ := mxj.NewMapXml(c.RawBody()); m != nil {
 			args = m
 		}
@@ -117,7 +117,7 @@ func (c *Ctx) ArgBool(key string) bool {
 	return v != "" && v != "0"
 }
 
-// ------ RESPONSE 响应 ------
+// ------ 响应 ------
 
 func (c *Ctx) Send(body any, format ...string) error {
 	c.format(body, format...)
@@ -142,7 +142,7 @@ func (c *Ctx) Status(code int) *Ctx {
 	return c
 }
 
-// Locals 设置或将值存储在上下文中。
+// Locals 设置或将值存储到上下文
 func (c *Ctx) Locals(key string, value ...any) any {
 	if value != nil {
 		c.ctx.Set(key, value[0])
@@ -182,10 +182,6 @@ func (c *Ctx) RawBody() (body []byte) {
 	return body
 }
 
-func (c *Ctx) GinCtx() *gin.Context {
-	return c.ctx
-}
-
 func (c *Ctx) StatusCode() int {
 	return c.ctx.Writer.Status()
 }
@@ -220,51 +216,52 @@ func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
 	return c.ctx.SaveUploadedFile(file, dst)
 }
 
+// format 自动根据 HeaderAccept 头返回对应的响应数据
 func (c *Ctx) format(body any, format ...string) {
-	gc := c.ctx
-	if gc.Abort(); body == nil { // 停止继续处理
+	ginCtx := c.ctx
+	if ginCtx.Abort(); body == nil { // 停止请求链
 		return
 	}
 
-	if st, ok := body.(int); ok {
-		gc.Status(st)
-		gc.Writer.WriteHeaderNow()
-		return
-	}
-
-	fmtStr := append(format, "")[0]
-	if fmtStr == FmtFile || fmtStr == FmtDown {
+	// 上传或下载文件
+	responseType := append(format, "")[0]
+	if responseType == FormatUpload || responseType == FormatDownload {
 		file := fmt.Sprint(body)
 		filename := filepath.Base(file)
-		if fmtStr == FmtDown {
+		if responseType == FormatDownload {
 			c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
 		}
-		gc.File(file)
+		ginCtx.File(file)
 		return
 	}
 
+	// 返回状态码、字符串、错误
 	switch b := body.(type) {
+	case int:
+		ginCtx.Status(b)
+		ginCtx.Writer.WriteHeaderNow()
+		return
 	case string:
-		gc.String(c.StatusCode(), b)
+		ginCtx.String(c.StatusCode(), b)
 		return
 	case error:
 		_ = c.engine.errHandler(c, b)
 		return
 	}
 
+	// 返回响应体
 	status := c.StatusCode()
 	accept := c.Header(HeaderAccept)
 
-	if fmtStr == FmtJSON || strings.Contains(accept, gin.MIMEJSON) { // 优先返回 JSON
-		gc.JSON(status, body)
-		return
-	} else if fmtStr == FmtXML || strings.Contains(accept, gin.MIMEXML) || strings.Contains(accept, gin.MIMEXML2) {
-		gc.XML(status, body)
-		return
-	} else if strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {
-		gc.String(status, fmt.Sprint(body))
+	if responseType == FormatXML || strings.Contains(accept, gin.MIMEXML) {
+		ginCtx.XML(status, body)
 		return
 	}
 
-	gc.JSON(status, body) // 默认返回 JSON
+	if strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {
+		ginCtx.String(status, fmt.Sprint(body))
+		return
+	}
+
+	ginCtx.JSON(status, body) // 默认返回 JSON
 }

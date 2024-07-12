@@ -1,25 +1,20 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
-	"github.com/bytedance/sonic"
+	"errors"
+
+	"github.com/baagod/sgin"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// r := sgin.New()
-	//
-	// r.GET("test", func(c *sgin.Ctx) {
-	// 	fmt.Println(c.Args())
-	// })
-	//
-	// r.Run(":9852")
+	r := sgin.New(sgin.Config{
+		Mode: gin.ReleaseMode,
+	})
 
-	m := map[string]any{}
-	dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(nil))
-	dec.UseNumber()
-	_ = dec.Decode(&m)
-	// c.args = args
+	r.GET("test", func(c *sgin.Ctx) error {
+		return errors.New("error")
+	})
 
-	fmt.Println(m, m == nil)
+	r.Run(":9852")
 }
