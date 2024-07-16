@@ -22,7 +22,7 @@ type Routers struct {
 }
 
 func (r *Routers) Use(args ...Handler) Router {
-	r.iRouter().Use(handle(r, args...)...)
+	r.iRouter().Use(handler(r, args...)...)
 	return r.router()
 }
 
@@ -35,12 +35,12 @@ func (r *Routers) POST(path string, handlers ...Handler) Router {
 }
 
 func (r *Routers) Group(path string, handlers ...Handler) Router {
-	grp := r.grp.Group(path, handle(r, handlers...)...)
+	grp := r.grp.Group(path, handler(r, handlers...)...)
 	return &Routers{grp: grp, engine: r.engine}
 }
 
 func (r *Routers) Handle(method string, path string, handlers ...Handler) Router {
-	r.iRouter().Handle(method, path, handle(r, handlers...)...)
+	r.iRouter().Handle(method, path, handler(r, handlers...)...)
 	return r.router()
 }
 

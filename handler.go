@@ -11,8 +11,17 @@ import (
 
 type Handler any // func(*Ctx[, T]) -> T | (int, T) | (T, error)
 
-func handle(r *Routers, a ...Handler) (handlers []gin.HandlerFunc) {
+func handler(r *Routers, a ...Handler) (handlers []gin.HandlerFunc) {
 	for _, f := range a {
+		switch ginHandler := f.(type) {
+		case gin.HandlerFunc:
+			handlers = append(handlers, ginHandler)
+			continue
+		case func(*gin.Context):
+			handlers = append(handlers, ginHandler)
+			continue
+		}
+
 		handler := reflect.ValueOf(f)
 		handlerType := handler.Type()
 

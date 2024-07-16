@@ -1,20 +1,24 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/baagod/sgin"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	r := sgin.New(sgin.Config{
-		Mode: gin.ReleaseMode,
-	})
+	var r sgin.Response
+	r2 := r.SetStatus(1)
 
-	r.GET("test", func(c *sgin.Ctx) error {
-		return errors.New("error")
-	})
+	fmt.Printf("r, r2: %T, %T\n", r, r2)
 
-	r.Run(":9852")
+	// r := sgin.New(sgin.Config{
+	// 	Mode: gin.ReleaseMode,
+	// })
+	//
+	// r.GET("test", func(c *sgin.Ctx) error {
+	// 	return errors.New("error")
+	// })
+	//
+	// r.Run(":9852")
 }
