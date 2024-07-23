@@ -18,13 +18,9 @@ type Engine struct {
 }
 
 type Config struct {
-	Mode           string // gin.DebugMode | gin.ReleaseMode | gin.TestMode
-	Run            string // address, e.g ":8080"
-	RunTLS         string // address, certFile, keyFile
-	RunListener    net.Listener
-	RunTLSListener func() (listener net.Listener, certFile string, keyFile string)
-	Recovery       func(*Ctx, string)
-	ErrorHandler   func(*Ctx, error) error
+	Mode         string // gin.DebugMode | gin.ReleaseMode | gin.TestMode
+	Recovery     func(*Ctx, string)
+	ErrorHandler func(*Ctx, error) error
 }
 
 // DefaultErrorHandler 该进程从处理程序返回错误
@@ -73,27 +69,47 @@ func (e *Engine) Routes() gin.RoutesInfo {
 	return e.engine.Routes()
 }
 
-func (e *Engine) Run() (err error) {
-	if tlsFn := e.config.RunTLSListener; tlsFn != nil {
-		listener, certFile, keyFile := tlsFn()
-		if gin.IsDebugging() {
-			_, _ = fmt.Fprintf(gin.DefaultWriter, "[GIN-debug] Listening and serving HTTPS on listener what's bind with address@%s", listener.Addr())
-			defer func() {
-				if err != nil {
-					_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[GIN-debug] [ERROR] %v\n", err)
-				}
-			}()
-		}
-		return http.ServeTLS(listener, e.engine.Handler(), certFile, keyFile)
+func (e *Engine) Handler() http.Handler {
+	return e.engine.Handler()
+}
 
-	} else if listener := e.config.RunListener; listener != nil {
-		return e.engine.RunListener(listener)
+func (e *Engine) Run(addr ...string) (err error) {
+	address := append(addr, ":8080")[0]
+	debug("Listening and serving HTTP on %s\n", address)
+	defer func() { debugError(err) }()
+	return http.ListenAndServe(address, e.Handler())
+}
 
-	} else if tls := e.config.RunTLS; tls != "" {
-		tls = strings.ReplaceAll(tls, " ", "")
-		certs := strings.Split(tls, ",")
-		return e.engine.RunTLS(certs[0], certs[0], certs[1])
+func (e *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
+	debug("Listening and serving HTTPS on %s\n", addr)
+	defer func() { debugError(err) }()
+	return http.ListenAndServeTLS(addr, certFile, keyFile, e.Handler())
+}
+
+func (e *Engine) RunServer(listener net.Listener) (err error) {
+	debug("Listening and serving HTTP on %s", listener.Addr())
+	defer func() { debugError(err) }()
+	return http.Serve(listener, e.Handler())
+}
+
+func (e *Engine) RunServeTLS(listener net.Listener, certFile string, keyFile string) (err error) {
+	debug("Listening and serving HTTPS on %s", listener.Addr())
+	defer func() { debugError(err) }()
+	return http.ServeTLS(listener, e.Handler(), certFile, keyFile)
+}
+
+func debug(format string, values ...any) {
+	if !gin.IsDebugging() {
+		return
 	}
+	if !strings.HasSuffix(format, "\n") {
+		format += "\n"
+	}
+	_, _ = fmt.Fprintf(gin.DefaultWriter, "[GIN-debug] "+format, values...)
+}
 
-	return e.engine.Run(e.config.Run)
+func debugError(err error) {
+	if err != nil && gin.IsDebugging() {
+		_, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[GIN-debug] [ERROR] %v\n", err)
+	}
 }
