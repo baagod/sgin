@@ -12,9 +12,9 @@ import (
 )
 
 type Engine struct {
+	Route
 	config Config
 	engine *gin.Engine
-	Routers
 }
 
 type Config struct {
@@ -50,7 +50,7 @@ func New(config ...Config) *Engine {
 	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		debugError(err)
 	}
-	e.Routers = Routers{engine: e, grp: &e.engine.RouterGroup, root: true}
+	e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
 
 	if cfg.Recovery != nil {
 		e.Use(func(ctx *Ctx) error {
