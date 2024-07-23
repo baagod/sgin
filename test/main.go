@@ -7,8 +7,9 @@ import (
 
 func main() {
 	r := sgin.New(sgin.Config{
-		Mode: gin.DebugMode,
+		Mode:           gin.DebugMode,
+		TrustedProxies: []string{"182", "192"},
 	})
 
-	r.Run()
+	_ = r.Run()
 }

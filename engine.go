@@ -18,9 +18,10 @@ type Engine struct {
 }
 
 type Config struct {
-	Mode         string // gin.DebugMode | gin.ReleaseMode | gin.TestMode
-	Recovery     func(*Ctx, string)
-	ErrorHandler func(*Ctx, error) error
+	Mode           string // gin.DebugMode | gin.ReleaseMode | gin.TestMode
+	TrustedProxies []string
+	Recovery       func(*Ctx, string)
+	ErrorHandler   func(*Ctx, error) error
 }
 
 // DefaultErrorHandler 该进程从处理程序返回错误
@@ -46,6 +47,9 @@ func New(config ...Config) *Engine {
 	gin.SetMode(cfg.Mode)
 
 	e := &Engine{engine: gin.New()}
+	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		debugError(err)
+	}
 	e.Routers = Routers{engine: e, grp: &e.engine.RouterGroup, root: true}
 
 	if cfg.Recovery != nil {
