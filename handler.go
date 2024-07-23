@@ -36,8 +36,8 @@ func handler(r *Routers, a ...Handler) (handlers []gin.HandlerFunc) {
 			if handlerType.NumIn() == 2 {                       // 如果处理函数有两个参数
 				value, err := bind(ginCtx, handlerType.In(1)) // 创建并绑定请求结构体
 				if err != nil {                               // 处理错误
-					ginCtx.Abort()                                             // 停止请求链
-					_ = r.engine.errHandler(ctx, &Error{Message: err.Error()}) // 返回错误
+					ginCtx.Abort()                                                      // 停止请求链
+					_ = r.engine.config.ErrorHandler(ctx, &Error{Message: err.Error()}) // 返回错误
 					return
 				}
 				inputParam = append(inputParam, value)

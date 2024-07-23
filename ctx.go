@@ -245,7 +245,7 @@ func (c *Ctx) format(body any, format ...string) {
 		ginCtx.String(c.StatusCode(), b)
 		return
 	case error:
-		_ = c.engine.errHandler(c, b)
+		_ = c.engine.config.ErrorHandler(c, b)
 		return
 	}
 
