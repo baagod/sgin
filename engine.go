@@ -46,7 +46,7 @@ func New(config ...Config) *Engine {
 	}
 	gin.SetMode(cfg.Mode)
 
-	e := &Engine{engine: gin.New()}
+	e := &Engine{engine: gin.New(), config: cfg}
 	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		debugError(err)
 	}
