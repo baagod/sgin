@@ -43,7 +43,7 @@ func handler(r *Route, a ...Handler) (handlers []gin.HandlerFunc) {
 				inputParam = append(inputParam, value)
 			}
 
-			response(ctx, handler.Call(inputParam))
+			ctx.response(handler.Call(inputParam))
 		})
 	}
 
@@ -90,7 +90,7 @@ func bind(c *gin.Context, T reflect.Type) (value reflect.Value, err error) {
 
 // response 返回响应 (处理函数的给定返回值)
 // 返回值可以为：T | (int, T) | (T, error)
-func response(c *Ctx, result []reflect.Value) {
+func (c *Ctx) response(result []reflect.Value) {
 	if result == nil { // 没有返回值
 		return
 	}
