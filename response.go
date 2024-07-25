@@ -25,6 +25,17 @@ type Response struct {
 	data    any
 }
 
+func (r *Response) MarshalJSON() ([]byte, error) {
+	return sonic.Marshal(&response{
+		Event:   r.event,
+		Status:  r.status,
+		Code:    r.code,
+		Count:   r.count,
+		Message: r.message,
+		Data:    r.data,
+	})
+}
+
 func (r *Response) UnmarshalJSON(data []byte) (err error) {
 	aux := &response{}
 	dec := sonic.ConfigDefault.NewDecoder(bytes.NewReader(data))
