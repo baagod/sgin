@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/bytedance/sonic"
+	"github.com/spf13/cast"
 )
 
 type response struct {
@@ -69,11 +70,12 @@ func (r *Response) Status(status int) *Response {
 	return r
 }
 
-func (r *Response) Code(code int) *Response {
+// Code 设置响应代码。可以是数字、布尔值或可转为数字的字符串。
+func (r *Response) Code(code any) *Response {
 	if r == nil {
-		return &Response{code: code}
+		return &Response{code: cast.ToInt(code)}
 	}
-	r.code = code
+	r.code = cast.ToInt(code)
 	return r
 }
 
@@ -101,6 +103,7 @@ func (r *Response) Message(format any, a ...any) *Response {
 	return r
 }
 
+// Data 设置响应数据。该方法同时将 r.status 设置为 1。
 func (r *Response) Data(data ...any) *Response {
 	if r == nil {
 		return &Response{status: 1, data: append(data, nil)[0]}

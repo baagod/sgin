@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/clbanning/mxj/v2"
+	"github.com/spf13/cast"
 
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
@@ -89,32 +89,31 @@ func (c *Ctx) Args() (args map[string]any) {
 	return args
 }
 
-func (c *Ctx) Arg(key string, e ...string) string {
+func (c *Ctx) Arg(key string, or ...string) string {
 	if v, ok := c.Args()[key]; ok {
 		return fmt.Sprint(v)
 	}
-	return append(e, "")[0]
+	return append(or, "")[0]
 }
 
-func (c *Ctx) ArgInt(key string, e ...int) int {
-	v, err := strconv.Atoi(c.Arg(key))
-	if err != nil && e != nil {
-		v = e[0]
+func (c *Ctx) ArgInt(key string, or ...int) int {
+	v, err := cast.ToIntE(key)
+	if err != nil && or != nil {
+		return or[0]
 	}
 	return v
 }
 
-func (c *Ctx) ArgInt64(key string, e ...int64) int64 {
-	v, err := strconv.ParseInt(c.Arg(key), 10, 64)
-	if err != nil && e != nil {
-		v = e[0]
+func (c *Ctx) ArgInt64(key string, or ...int64) int64 {
+	v, err := cast.ToInt64E(key)
+	if err != nil && or != nil {
+		return or[0]
 	}
 	return v
 }
 
 func (c *Ctx) ArgBool(key string) bool {
-	v := c.Arg(key)
-	return v != "" && v != "0"
+	return cast.ToBool(key)
 }
 
 // ------ 响应 ------
