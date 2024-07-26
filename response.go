@@ -24,6 +24,7 @@ type Response struct {
 	count   int
 	message string
 	data    any
+	err     bool // 只记录内部是否有错误，不返回。
 }
 
 func (r *Response) MarshalJSON() ([]byte, error) {
@@ -109,19 +110,23 @@ func (r *Response) Data(data ...any) *Response {
 		return &Response{status: 1, data: append(data, nil)[0]}
 	}
 
-	if r.status = 1; data != nil {
-		r.data = data[0]
+	if r.status = cast.ToInt(!r.err); r.err {
+		r.data = nil
+	} else {
+		r.data = append(data, nil)[0]
 	}
 
 	return r
 }
 
 func (r *Response) Error(format any, a ...any) *Response {
-	status, message, data := 0, "", any(nil)
+	status, message, data, err := 0, "", any(nil), false
+
 	if r != nil {
 		status = r.status
 		message = r.message
 		data = r.data
+		err = r.err
 	}
 
 	if format != nil { // 有错误
@@ -130,14 +135,16 @@ func (r *Response) Error(format any, a ...any) *Response {
 		} else {
 			message = fmt.Sprint(format)
 		}
+		err = true
 	}
 
 	if r == nil {
-		return &Response{status: status, message: message, data: data}
+		return &Response{status: status, message: message, data: data, err: err}
 	}
 
 	r.status = status
 	r.message = message
 	r.data = data
+	r.err = err
 	return r
 }
