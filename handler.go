@@ -97,20 +97,20 @@ func (c *Ctx) response(result []reflect.Value) {
 
 	first := result[0].Interface() // 第一个返回值
 	if len(result) == 1 {
-		c.format(first)
+		c.autoFormat(first)
 		return
 	}
 
 	second := result[1].Interface()        // 第二个返回值
 	if statusCode, ok := first.(int); ok { // (int, T)
-		c.Status(statusCode).format(second)
+		c.Status(statusCode).autoFormat(second)
 		return
 	}
 
 	if err, ok := second.(error); ok { // (T, error)
-		c.format(err)
+		c.autoFormat(err)
 		return
 	}
 
-	c.format(first) // 没有错误，返回 T
+	c.autoFormat(first) // 没有错误，返回 T
 }
