@@ -64,9 +64,9 @@ func bind(c *gin.Context, T reflect.Type) (value reflect.Value, err error) {
 	if c.Request.Method == "GET" || ct == gin.MIMEPOSTForm || strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
 		err = c.ShouldBind(ptr)
 	} else if ct == gin.MIMEJSON {
-		err = c.ShouldBindJSON(ptr)
+		err = c.ShouldBindBodyWithJSON(ptr)
 	} else if ct == gin.MIMEXML {
-		err = c.ShouldBindXML(ptr)
+		err = c.ShouldBindBodyWithXML(ptr)
 	}
 
 	var vErrs validator.ValidationErrors
