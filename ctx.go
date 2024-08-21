@@ -113,6 +113,14 @@ func (c *Ctx) ArgInt64(key string, or ...int64) int64 {
 	return v
 }
 
+func (c *Ctx) ArgFloat64(key string, or ...float64) float64 {
+	v, err := cast.ToFloat64E(c.Arg(key))
+	if err != nil && or != nil {
+		return or[0]
+	}
+	return v
+}
+
 func (c *Ctx) ArgBool(key string) bool {
 	return cast.ToBool(c.Arg(key))
 }
