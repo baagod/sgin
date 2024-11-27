@@ -27,6 +27,68 @@ type Response struct {
 	err     bool // 只记录内部是否有错误，不返回。
 }
 
+type Response2 struct {
+	Event   string `json:"event"`
+	Status  int    `json:"status"`
+	Code    int    `json:"code"`
+	Count   int    `json:"count"`
+	Message string `json:"msg"`
+	Data    any    `json:"data"`
+}
+
+func (r *Response2) SetStatus(status ...any) *Response2 {
+	newcode := 0
+	st := cast.ToInt(status[0])
+
+	if len(status) > 1 {
+		newcode = cast.ToInt(status[1])
+		if r != nil {
+			r.Code = newcode
+		}
+	}
+
+	if r == nil {
+		return &Response2{Status: st, Code: newcode}
+	}
+
+	r.Status = st
+	return r
+}
+
+func (r *Response2) SetCode(code any) *Response2 {
+	if r == nil {
+		return &Response2{Code: cast.ToInt(code)}
+	}
+	r.Code = cast.ToInt(code)
+	return r
+}
+
+func (r *Response2) SetMessage(msg any) *Response2 {
+	if r == nil {
+		return &Response2{Message: fmt.Sprint(msg)}
+	}
+	r.Message = fmt.Sprint(msg)
+	return r
+}
+
+func (r *Response2) SetData(data any) *Response2 {
+	if r == nil {
+		return &Response2{Data: data}
+	}
+	r.Data = data
+	r.Status = 1
+	return r
+}
+
+func (r *Response2) SetFailedData(data any) *Response2 {
+	if r == nil {
+		return &Response2{Data: data}
+	}
+	r.Data = data
+	r.Status = 0
+	return r
+}
+
 func (r *Response) MarshalJSON() ([]byte, error) {
 	return sonic.Marshal(&response{
 		Event:   r.event,
