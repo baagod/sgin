@@ -3,10 +3,10 @@ module github.com/baagod/sgin
 go 1.20
 
 require (
-	github.com/bytedance/sonic v1.12.3
+	github.com/bytedance/sonic v1.12.5
 	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/gin-gonic/gin v1.10.0
-	github.com/go-playground/validator/v10 v10.22.1
+	github.com/go-playground/validator/v10 v10.23.0
 	github.com/spf13/cast v1.7.0
 	github.com/ztrue/tracerr v0.4.0
 )
