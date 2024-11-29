@@ -174,6 +174,14 @@ func (c *Ctx) Header(key string, value ...string) string {
 	return c.ctx.GetHeader(key)
 }
 
+func (c *Ctx) HeaderElse(key string, defaultvalue ...string) string {
+	header := c.ctx.GetHeader(key)
+	if header == "" && defaultvalue != nil {
+		return defaultvalue[0]
+	}
+	return header
+}
+
 func (c *Ctx) HeaderOrQuery(key string) (value string) {
 	if value = c.ctx.GetHeader(key); value == "" {
 		value = c.ctx.Query(key)
