@@ -166,27 +166,21 @@ func (c *Ctx) Method() string {
 	return c.Request.Method
 }
 
+// Header 获取 HTTP 请求头的值，如果不存在则返回可选的默认值。
 func (c *Ctx) Header(key string, value ...string) string {
-	if value != nil {
-		c.ctx.Header(key, value[0])
-		return ""
-	}
-	return c.ctx.GetHeader(key)
-}
-
-func (c *Ctx) HeaderElse(key string, defaultvalue ...string) string {
 	header := c.ctx.GetHeader(key)
-	if header == "" && defaultvalue != nil {
-		return defaultvalue[0]
+	if header == "" && value != nil {
+		return value[0]
 	}
 	return header
 }
 
-func (c *Ctx) HeaderOrQuery(key string) (value string) {
-	if value = c.ctx.GetHeader(key); value == "" {
-		value = c.ctx.Query(key)
+func (c *Ctx) HeaderElse(key string, value ...string) string {
+	header := c.ctx.GetHeader(key)
+	if header == "" && value != nil {
+		return value[0]
 	}
-	return value
+	return header
 }
 
 func (c *Ctx) RawBody() (body []byte) {
