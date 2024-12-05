@@ -175,12 +175,8 @@ func (c *Ctx) Header(key string, value ...string) string {
 	return header
 }
 
-func (c *Ctx) HeaderElse(key string, value ...string) string {
-	header := c.ctx.GetHeader(key)
-	if header == "" && value != nil {
-		return value[0]
-	}
-	return header
+func (c *Ctx) SetHeader(key string, value string) {
+	c.ctx.Header(key, value)
 }
 
 func (c *Ctx) RawBody() (body []byte) {

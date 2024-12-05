@@ -65,7 +65,7 @@ func (r *Response) SetMessage(msg any) *Response {
 // SetData 设置数据
 func (r *Response) SetData(data any) *Response {
 	if r == nil {
-		return &Response{Data: data}
+		return &Response{Data: data, Status: 1}
 	}
 	r.Data = data
 	r.Status = 1
