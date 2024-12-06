@@ -256,8 +256,8 @@ func (c *Ctx) autoFormat(body any, format ...string) {
 	status := c.StatusCode()
 	accept := c.Header(HeaderAccept)
 
-	if responseType == FormatString || strings.Contains(accept, gin.MIMEHTML) || strings.Contains(accept, gin.MIMEPlain) {
-		ginCtx.String(status, fmt.Sprint(body))
+	if responseType == FormatJSON || strings.Contains(accept, gin.MIMEJSON) {
+		ginCtx.JSON(status, body)
 		return
 	}
 
@@ -273,14 +273,15 @@ func (c *Ctx) autoFormat(body any, format ...string) {
 		return
 	}
 
-	// 默认返回 JSON
-	c.Header(HeaderAccept, gin.MIMEJSON)
-	if b, ok := body.([]byte); ok { // 返回 []byte
-		body = string(b)
-	}
-	if s, ok := body.(string); ok { // 返回字符串
-		ginCtx.String(status, s)
+	bodyType := fmt.Sprintf("%T", body)
+	if responseType == FormatString ||
+		strings.Contains(accept, gin.MIMEHTML) ||
+		strings.Contains(accept, gin.MIMEPlain) ||
+		bodyType == "string" ||
+		bodyType == "[]uint8" /* []byte */ {
+		ginCtx.String(status, fmt.Sprintf("%s", body))
 		return
 	}
-	ginCtx.JSON(status, body)
+
+	ginCtx.JSON(status, body) // 默认返回 JSON
 }
