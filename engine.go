@@ -39,18 +39,24 @@ func DefaultErrorHandler(c *Ctx, err error) error {
 	return c.Status(statusCode).Send(err.Error())
 }
 
-func New(config ...Config) *Engine {
+func defaultConfig(config ...Config) Config {
 	cfg := append(config, Config{})[0]
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = DefaultErrorHandler
 	}
+	return cfg
+}
+
+func New(config ...Config) *Engine {
+	cfg := defaultConfig(config...)
 	gin.SetMode(cfg.Mode)
 
 	e := &Engine{engine: gin.New(), config: cfg}
+	e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
+
 	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		debugError(err)
 	}
-	e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
 
 	if cfg.Recovery != nil {
 		e.Use(func(ctx *Ctx) error {

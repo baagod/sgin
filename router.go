@@ -22,7 +22,12 @@ type Route struct {
 }
 
 func (r *Route) Use(args ...Handler) Router {
-	r.group.Use(handler(r, args...)...)
+	handlers := handler(r, args...)
+	if r.root {
+		r.engine.engine.Use(handlers...)
+	} else {
+		r.group.Use(handlers...)
+	}
 	return r.router()
 }
 
