@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/bytedance/sonic v1.12.5
 	github.com/clbanning/mxj/v2 v2.7.0
-	github.com/gin-gonic/gin v1.9.1
+	github.com/gin-gonic/gin v1.8.2
 	github.com/go-playground/validator/v10 v10.23.0
 	github.com/spf13/cast v1.7.0
 	github.com/ztrue/tracerr v0.4.0
@@ -35,5 +35,5 @@ require (
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
