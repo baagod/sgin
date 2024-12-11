@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -64,9 +65,9 @@ func bind(c *gin.Context, T reflect.Type) (value reflect.Value, err error) {
 	if c.Request.Method == "GET" || ct == gin.MIMEPOSTForm || strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
 		err = c.ShouldBind(ptr)
 	} else if ct == gin.MIMEJSON {
-		err = c.ShouldBindBodyWithJSON(ptr)
+		err = c.ShouldBindBodyWith(ptr, binding.JSON)
 	} else if ct == gin.MIMEXML {
-		err = c.ShouldBindBodyWithXML(ptr)
+		err = c.ShouldBindBodyWith(ptr, binding.XML)
 	}
 
 	var vErrs validator.ValidationErrors
