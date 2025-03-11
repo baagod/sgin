@@ -62,8 +62,8 @@ func (r *Response) SetMessage(msg any) *Response {
 	return r
 }
 
-// SetData 设置数据
-func (r *Response) SetData(data any) *Response {
+// OK 设置成功 (status=1) 数据
+func (r *Response) OK(data any) *Response {
 	if r == nil {
 		return &Response{Data: data, Status: 1}
 	}
@@ -72,8 +72,8 @@ func (r *Response) SetData(data any) *Response {
 	return r
 }
 
-// SetFailData 设置失败数据
-func (r *Response) SetFailData(data any) *Response {
+// Failed 设置失败 (status=0) 数据
+func (r *Response) Failed(data any) *Response {
 	if r == nil {
 		return &Response{Data: data}
 	}
