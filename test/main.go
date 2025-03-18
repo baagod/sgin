@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+
 	"github.com/baagod/sgin"
 	"github.com/gin-gonic/gin"
 )
@@ -53,17 +54,6 @@ func main() {
 		// 	// 更新逻辑
 		// 	r.Error(db.updates(&data).Error)
 		// }
-		return r.Data(person)
+		return r.OK(person)
 	})
-
-	_ = r.Run()
 }
-
-// {
-//     "event":  "",
-//     "status": 0,
-//     "code":   10,
-//     "count":  r.count,
-//     "msg":    "err desc",
-//     "data":   person,
-// }

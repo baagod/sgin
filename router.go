@@ -10,6 +10,8 @@ type Router interface {
 	Use(args ...Handler) Router
 	GET(path string, handlers ...Handler) Router
 	POST(path string, handlers ...Handler) Router
+	PUT(path string, handlers ...Handler) Router
+	DELETE(path string, handlers ...Handler) Router
 	Group(path string, handlers ...Handler) Router
 	Handle(method, path string, handlers ...Handler) Router
 	Static(path, root string) Router
@@ -37,6 +39,14 @@ func (r *Route) GET(path string, handlers ...Handler) Router {
 
 func (r *Route) POST(path string, handlers ...Handler) Router {
 	return r.Handle(http.MethodPost, path, handlers...)
+}
+
+func (r *Route) PUT(path string, handlers ...Handler) Router {
+	return r.Handle(http.MethodPut, path, handlers...)
+}
+
+func (r *Route) DELETE(path string, handlers ...Handler) Router {
+	return r.Handle(http.MethodDelete, path, handlers...)
 }
 
 func (r *Route) Group(path string, handlers ...Handler) Router {

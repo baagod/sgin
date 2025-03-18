@@ -83,29 +83,39 @@ func (e *Engine) Handler() http.Handler {
 	return e.engine.Handler()
 }
 
-func (e *Engine) Run(addr ...string) (err error) {
-	address := append(addr, ":8080")[0]
-	debug("Listening and serving HTTP on %s\n", address)
+// Run 启动 HTTP 或 HTTPS 服务器。
+// 参数 addr 指定服务器监听的地址，为空则使用 ":8080"。
+// 参数 cert 为可选参数，包含证书和私钥路径，如果提供则启动 HTTPS 服务器；否则启动 HTTP 服务器。
+// 返回值 err 表示启动服务器时可能发生的错误。
+func (e *Engine) Run(addr string, cert ...string) (err error) {
 	defer func() { debugError(err) }()
-	return http.ListenAndServe(address, e.Handler())
+	if addr == "" {
+		addr = ":8080"
+	}
+
+	if cert != nil {
+		debug("Listening and serving HTTPS on %s\n", addr)
+		return http.ListenAndServeTLS(addr, cert[0], cert[1], e.Handler())
+	}
+
+	debug("Listening and serving HTTP on %s\n", addr)
+	return http.ListenAndServe(addr, e.Handler())
 }
 
-func (e *Engine) RunTLS(addr, certFile, keyFile string) (err error) {
-	debug("Listening and serving HTTPS on %s\n", addr)
+// RunServer 使用提供的 listener 启动 HTTP 或 HTTPS 服务器。
+// 参数 listener 是一个 net.Listener 接口，用于指定服务器监听的网络连接。
+// 参数 cert 为可选参数，包含证书和私钥路径，如果提供则启动 HTTPS 服务器；否则启动 HTTP 服务器。
+// 返回值 err 表示启动服务器时可能发生的错误。
+func (e *Engine) RunServer(listener net.Listener, cert ...string) (err error) {
 	defer func() { debugError(err) }()
-	return http.ListenAndServeTLS(addr, certFile, keyFile, e.Handler())
-}
 
-func (e *Engine) RunServer(listener net.Listener) (err error) {
+	if cert != nil {
+		debug("Listening and serving HTTPS on %s", listener.Addr())
+		return http.ServeTLS(listener, e.Handler(), cert[0], cert[1])
+	}
+
 	debug("Listening and serving HTTP on %s", listener.Addr())
-	defer func() { debugError(err) }()
 	return http.Serve(listener, e.Handler())
-}
-
-func (e *Engine) RunServeTLS(listener net.Listener, certFile string, keyFile string) (err error) {
-	debug("Listening and serving HTTPS on %s", listener.Addr())
-	defer func() { debugError(err) }()
-	return http.ServeTLS(listener, e.Handler(), certFile, keyFile)
 }
 
 func debug(format string, values ...any) {
