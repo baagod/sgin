@@ -22,6 +22,7 @@ type Config struct {
 	TrustedProxies []string
 	Recovery       func(*Ctx, string)
 	ErrorHandler   func(*Ctx, error) error
+	OpenAPI        bool // 是否开启 OpenAPI 文档生成
 }
 
 // DefaultErrorHandler 该进程从处理程序返回错误
