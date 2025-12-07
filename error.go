@@ -1,12 +1,8 @@
 package sgin
 
-import "net/http"
-
-// APIError 定义了 V2 标准错误接口
-type APIError interface {
-    error
-    Status() int
-}
+import (
+    "net/http"
+)
 
 // Error 是 APIError 的默认实现
 type Error struct {
@@ -16,10 +12,6 @@ type Error struct {
 
 func (e *Error) Error() string {
     return e.Message
-}
-
-func (e *Error) Status() int {
-    return e.Code
 }
 
 // NewError 创建一个新的 Error
