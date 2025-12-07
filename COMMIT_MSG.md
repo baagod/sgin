@@ -1,10 +1,5 @@
-feat(core): 实现 V2 智能 Handler 架构
+fix(docs): 移除 openapi.go 中不准确的 RequestBody 解析逻辑
 
-- 引入 result.go 用于统一响应归一化
-- 重构 handler.go 以支持智能反射、启动自检及复合绑定 (bindV2)
-- 更新 ctx.go 以通过 sendResult 消费归一化结果
-- 在 Engine 中新增 OpenAPI 配置项
-- 新增 sgin_test.go 单元测试并更新 test/main.go 示例
-- 在 evolution.md 中记录架构演进
-
-此提交标志着 sgin 向“实用主义 V2”架构的转型，支持 r.Get(path, handler any) 语法、复合绑定（URI/Header/Query/Body）及统一错误处理。
+- 在 parseRequest 函数中，移除了基于 hasJSON 标记的简单 Body 判断。
+- 删除了自动设置 op.RequestBody 的代码块，以避免将包含 json 标签的 Query/Form 参数错误地识别为 JSON Body。
+- Body 解析逻辑将在后续版本中进一步精细化。

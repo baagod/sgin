@@ -171,3 +171,29 @@ func TestOpenAPIGeneration(t *testing.T) {
 		}
 	}
 }
+
+// TestScalarDocs 测试 Scalar UI 页面
+func TestScalarDocs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := New(Config{OpenAPI: true})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/docs", nil)
+	r.engine.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("Expected 200 OK, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Header().Get("Content-Type"), "text/html") {
+		t.Errorf("Expected Content-Type text/html, got %s", w.Header().Get("Content-Type"))
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "https://cdn.jsdelivr.net/npm/@scalar/api-reference") {
+		t.Error("Scalar CDN link not found in HTML")
+	}
+	if !strings.Contains(body, "data-url=\"/openapi.json\"") {
+		t.Error("data-url configuration not found in HTML")
+	}
+}
