@@ -22,8 +22,8 @@ type Config struct {
     TrustedProxies []string
     Recovery       func(*Ctx, string)
     ErrorHandler   func(*Ctx, error) error
-    Logger         func(c *Ctx, msg string, jsonLog string) // 自定义日志处理
-    OpenAPI        bool                                     // 是否开启 OpenAPI 文档生成
+    Logger         func(c *Ctx, msg, jsonLog string) bool // 自定义日志处理，返回 true 则继续输出默认日志
+    OpenAPI        bool                                   // 是否开启 OpenAPI 文档生成
 }
 
 // DefaultErrorHandler 默认的错误处理器

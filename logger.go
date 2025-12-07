@@ -29,9 +29,9 @@ func Logger(c *Ctx) {
     }
 
     // 提取错误信息
-    var errorMessage string
+    var errMsg string
     if gc.Errors != nil && len(gc.Errors) > 0 {
-        errorMessage = gc.Errors.ByType(gin.ErrorTypePrivate).String()
+        errMsg = gc.Errors.ByType(gin.ErrorTypePrivate).String()
     }
 
     t := end.Format("2006-01-02 15:04:05")
@@ -45,8 +45,8 @@ func Logger(c *Ctx) {
     msg := fmt.Sprintf("[GIN] %s | status=%d latency=%s ip=%s method=%s path=%s trace=%s",
         t, status, milli, ip, c.Request.Method, path, traceid,
     )
-    if errorMessage != "" {
-        msg = msg + " | error=" + errorMessage
+    if errMsg != "" {
+        msg += " | error=" + errMsg
     }
 
     // 2. 生成 JSON 消息
@@ -59,17 +59,19 @@ func Logger(c *Ctx) {
         "path":    path,
         "traceid": traceid,
     }
-    if errorMessage != "" {
-        logMap["error"] = errorMessage
+    if errMsg != "" {
+        logMap["error"] = errMsg
     }
     jsonBytes, _ := json.Marshal(logMap)
     jsonLog := string(jsonBytes)
 
     // 3. 执行回调或默认输出
+    next := true
     if logger := c.engine.config.Logger; logger != nil {
-        logger(c, msg, jsonLog)
-    } else {
-        // 默认输出 JSON
+        next = logger(c, msg, jsonLog)
+    }
+
+    if next { // 默认输出 msg，方便终端查看。
         fmt.Fprintf(gin.DefaultWriter, "%s\n", msg)
     }
 }
