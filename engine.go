@@ -22,22 +22,24 @@ type Config struct {
     TrustedProxies []string
     Recovery       func(*Ctx, string)
     ErrorHandler   func(*Ctx, error) error
-    OpenAPI        bool // 是否开启 OpenAPI 文档生成
+    Logger         func(c *Ctx, msg string, jsonLog string) // 自定义日志处理
+    OpenAPI        bool                                     // 是否开启 OpenAPI 文档生成
 }
 
-// DefaultErrorHandler 该进程从处理程序返回错误
+// DefaultErrorHandler 默认的错误处理器
 func DefaultErrorHandler(c *Ctx, err error) error {
-    var e *Error
-    statusCode := StatusInternalServerError
+    // Status code default is 500
+    code := StatusInternalServerError
 
+    var e *Error
     if errors.As(err, &e) && e.Code > 0 { // 如果是 *Error 错误
-        statusCode = e.Code
+        code = e.Code
     } else if stc := c.StatusCode(); stc != 200 && stc != 0 {
-        statusCode = stc
+        code = stc
     }
 
     c.Header(HeaderContentType, MIMETextPlainCharsetUTF8)
-    return c.Status(statusCode).Send(err.Error())
+    return c.Status(code).Send(err.Error())
 }
 
 func defaultConfig(config ...Config) Config {
@@ -55,10 +57,14 @@ func New(config ...Config) *Engine {
     e := &Engine{engine: gin.New(), config: cfg}
     e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
 
+    // 默认使用结构化日志
+    e.Use(Logger)
+
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
         debugError(err)
     }
 
+    // Recovery 中间件
     if cfg.Recovery != nil {
         e.Use(func(ctx *Ctx) error {
             defer func() {
@@ -73,6 +79,7 @@ func New(config ...Config) *Engine {
         e.engine.Use(gin.Recovery())
     }
 
+    // OpenAPI 文档中间件
     if cfg.OpenAPI {
         e.engine.GET("/openapi.json", func(c *gin.Context) {
             c.JSON(http.StatusOK, globalSpec)

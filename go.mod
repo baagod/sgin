@@ -1,6 +1,6 @@
 module github.com/baagod/sgin
 
-go 1.20
+go 1.25
 
 require (
 	github.com/bytedance/sonic v1.12.5

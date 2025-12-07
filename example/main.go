@@ -28,8 +28,7 @@ func main() {
     r := sgin.New(sgin.Config{
         Mode:    gin.DebugMode, // 调试模式
         OpenAPI: true,          // 开启 OpenAPI 文档
-        ErrorHandler: func(c *sgin.Ctx, err error) error {
-            // 示例自定义错误处理
+        ErrorHandler: func(c *sgin.Ctx, err error) error { // 示例自定义错误处理
             var apiErr *sgin.Error
             if errors.As(err, &apiErr) {
                 // 如果是 APIError，使用它提供的状态码和信息

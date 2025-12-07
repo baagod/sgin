@@ -2,6 +2,8 @@ package sgin
 
 import (
     "bytes"
+    "crypto/rand"
+    "encoding/hex"
     "fmt"
     "io"
     "mime/multipart"
@@ -17,6 +19,8 @@ import (
     "github.com/gin-gonic/gin"
 )
 
+const CtxKey = "_baa/sgin/ctxkey"
+
 const (
     FormatXML      = "XML"
     FormatJSON     = "JSON"
@@ -31,13 +35,14 @@ type Ctx struct {
     Params  gin.Params
     Keys    map[string]any
 
-    ctx    *gin.Context
-    engine *Engine
-    args   any
+    traceid string
+    ctx     *gin.Context
+    engine  *Engine
+    args    any
 }
 
 func newCtx(ctx *gin.Context, e *Engine) *Ctx {
-    return &Ctx{
+    c := &Ctx{
         engine:  e,
         ctx:     ctx,
         Request: ctx.Request,
@@ -45,6 +50,27 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
         Params:  ctx.Params,
         Keys:    ctx.Keys,
     }
+    c.initTraceID()
+    return c
+}
+
+func (c *Ctx) initTraceID() {
+    // 优先从 Header 获取
+    traceID := c.Header("X-Request-ID")
+    if traceID == "" {
+        // 生成随机 ID (简单实现: 32字符 hex)
+        b := make([]byte, 16)
+        if _, err := rand.Read(b); err == nil {
+            traceID = hex.EncodeToString(b)
+        }
+    }
+    c.traceid = strings.ToUpper(traceID)
+    c.SetHeader("X-Request-ID", traceID) // 回写到 Response Header
+}
+
+// GetTraceID 获取当前请求的 traceid
+func (c *Ctx) GetTraceID() string {
+    return c.traceid
 }
 
 // ------ 请求参数 ------
@@ -203,11 +229,8 @@ func (c *Ctx) Param(key string) string {
     return c.Params.ByName(key)
 }
 
-func (c *Ctx) IP() (ip string) {
-    if ip = c.ctx.ClientIP(); ip == "::1" {
-        ip = "127.0.0.1"
-    }
-    return ip
+func (c *Ctx) IP() string {
+    return c.ctx.ClientIP()
 }
 
 func (c *Ctx) Cookie(name string) (string, error) {

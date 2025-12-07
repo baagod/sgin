@@ -1,7 +1,8 @@
-refactor(core): 简化错误处理机制，移除 APIError 接口
+feat(core): 完成 M4 阶段 - 增强可观测性与日志系统
 
-- 移除 `APIError` 接口，统一使用 `*sgin.Error` 结构体，以保持与主流框架（如 Fiber）的一致性和简洁性。
-- 移除 `Error` 结构体的 `Status()` 方法，直接使用 `Code` 字段。
-- 将所有预定义错误（如 `ErrBadRequest`）转换为函数形式，支持自定义错误消息。
-- 修正 `example/main.go` 中的错误处理逻辑，适配新的错误结构。
-- 修正 `NewError` 的默认消息逻辑，使用 `http.StatusText(code)`。
+- 在 `ctx.go` 中集成 TraceID（私有字段），并提供 `GetTraceID` 方法及自动 Header 注入。
+- 重构 `logger.go`，实现双模日志（Text/JSON）并支持通过 `Config.Logger` 自定义回调。
+- 优化日志格式，统一使用毫秒整数 (`100ms`) 记录耗时，并修复 IP 显示问题 (`::1` -> `127.0.0.1`)。
+- 在 `engine.go` 中默认启用结构化日志中间件，并清理了旧的错误处理逻辑。
+- 移除不再使用的 `utils` 包，精简依赖。
+- 修复项目中的缩进问题，统一为 Tab 缩进。
