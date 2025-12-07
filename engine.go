@@ -73,6 +73,16 @@ func New(config ...Config) *Engine {
 		e.engine.Use(gin.Recovery())
 	}
 
+	if cfg.OpenAPI {
+		e.engine.GET("/openapi.json", func(c *gin.Context) {
+			c.JSON(http.StatusOK, globalSpec)
+		})
+		e.engine.GET("/docs", func(c *gin.Context) {
+			c.Header("Content-Type", "text/html; charset=utf-8")
+			c.String(http.StatusOK, swaggerHTML)
+		})
+	}
+
 	return e
 }
 

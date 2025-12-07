@@ -106,3 +106,68 @@ func TestStartupValidation(t *testing.T) {
 	// 注册一个错误的 Handler (3个参数)
 	r.GET("/panic", func(c *Ctx, a int, b int) {})
 }
+
+// TestOpenAPIGeneration 测试 OpenAPI 文档自动生成
+func TestOpenAPIGeneration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// 开启 OpenAPI
+	r := New(Config{OpenAPI: true})
+
+	// 注册路由
+	r.POST("/api/v1/users/:id", func(c *Ctx, req UserReq) (UserRes, error) {
+		return UserRes{}, nil
+	})
+
+	// 请求 spec
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/openapi.json", nil)
+	r.engine.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("Expected 200 OK for /openapi.json, got %d", w.Code)
+	}
+
+	var spec OpenAPISpec
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatalf("Failed to unmarshal OpenAPI spec: %v", err)
+	}
+
+	// 验证基本信息
+	if spec.OpenAPI != "3.2.0" {
+		t.Errorf("Expected OpenAPI 3.2.0, got %s", spec.OpenAPI)
+	}
+
+	// 验证 Path (注意: Gin的 :id 应该被转换为 {id})
+	path := "/api/v1/users/{id}"
+	if _, ok := spec.Paths[path]; !ok {
+		t.Errorf("Path %s not found in spec. Available: %v", path, spec.Paths)
+	}
+
+	op := spec.Paths[path]["post"]
+	if op.Responses == nil {
+		t.Error("Operation responses not found")
+	}
+
+	// 验证 Schema (UserReq)
+	// 参数: ID (uri)
+	foundID := false
+	for _, p := range op.Parameters {
+		if p.Name == "id" && p.In == "path" {
+			foundID = true
+			break
+		}
+	}
+	if !foundID {
+		t.Error("Parameter 'id' (in path) not generated")
+	}
+
+	// Request Body (Name field from UserReq)
+	if op.RequestBody == nil {
+		t.Error("RequestBody not generated")
+	} else {
+		content := op.RequestBody.Content["application/json"]
+		if content.Schema == nil || !strings.Contains(content.Schema.Ref, "UserReq") {
+			t.Errorf("RequestBody schema ref error, got %v", content.Schema)
+		}
+	}
+}

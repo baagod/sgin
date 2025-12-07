@@ -2,6 +2,7 @@ package sgin
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,6 +56,16 @@ func (r *Route) Group(path string, handlers ...Handler) Router {
 }
 
 func (r *Route) Handle(method string, path string, handlers ...Handler) Router {
+	if r.engine.config.OpenAPI {
+		fullPath := r.group.BasePath() + path
+		// 移除可能重复的斜杠
+		if strings.Contains(fullPath, "//") {
+			fullPath = strings.ReplaceAll(fullPath, "//", "/")
+		}
+		for _, h := range handlers {
+			AnalyzeAndRegister(fullPath, method, h)
+		}
+	}
 	r.group.Handle(method, path, handler(r, handlers...)...)
 	return r.router()
 }
