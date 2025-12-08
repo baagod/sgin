@@ -46,8 +46,15 @@ func main() {
         },
     })
 
+    // 制造一个 Panic 来测试 Recovery
+    r.GET("/panic", func(c *sgin.Ctx) any {
+        // 模拟空指针异常
+        var user *UserResp
+        return user.ID // 这里会 Panic
+    })
+
     // 注册一个 V2 智能 Handler
-    r.POST("users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
+    r.GET("users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
         fmt.Printf("收到请求: %+v\n", req) // 打印请求内容
 
         // if req.ID <= 0 {

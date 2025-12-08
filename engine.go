@@ -8,7 +8,6 @@ import (
     "strings"
 
     "github.com/gin-gonic/gin"
-    "github.com/ztrue/tracerr"
 )
 
 type Engine struct {
@@ -22,8 +21,9 @@ type Config struct {
     TrustedProxies []string
     Recovery       func(*Ctx, string)
     ErrorHandler   func(*Ctx, error) error
-    Logger         func(c *Ctx, msg, jsonLog string) bool // 自定义日志处理，返回 true 则继续输出默认日志
-    OpenAPI        bool                                   // 是否开启 OpenAPI 文档生成
+    // 日志记录器回调，参数为 [文本] 和 [JSON] 消息，返回 true 输出默认日志。
+    Logger  func(*Ctx, string, string) bool
+    OpenAPI bool // 是否开启 OpenAPI 文档生成
 }
 
 // DefaultErrorHandler 默认的错误处理器
@@ -57,26 +57,9 @@ func New(config ...Config) *Engine {
     e := &Engine{engine: gin.New(), config: cfg}
     e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
 
-    // 默认使用结构化日志
-    e.Use(Logger)
-
+    e.Use(Logger, Recovery) // 注册 [日志] 和 [恢复] 中间件
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
         debugError(err)
-    }
-
-    // Recovery 中间件
-    if cfg.Recovery != nil {
-        e.Use(func(ctx *Ctx) error {
-            defer func() {
-                if err := recover(); err != nil {
-                    _ = ctx.Send(ErrInternalServerError())
-                    cfg.Recovery(ctx, tracerr.Sprint(tracerr.Wrap(err.(error))))
-                }
-            }()
-            return ctx.Next()
-        })
-    } else {
-        e.engine.Use(gin.Recovery())
     }
 
     // OpenAPI 文档中间件

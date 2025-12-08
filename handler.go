@@ -70,7 +70,7 @@ func handler(r *Route, a ...Handler) (handlers []gin.HandlerFunc) {
                 val, err := bindV2(ginCtx, reqType)
                 if err != nil {
                     // 绑定失败，统一处理错误
-                    _ = r.engine.config.ErrorHandler(ctx, &Error{Message: err.Error(), Code: 400})
+                    _ = r.engine.config.ErrorHandler(ctx, ErrBadRequest(err.Error()))
                     ginCtx.Abort()
                     return
                 }
@@ -90,12 +90,6 @@ func handler(r *Route, a ...Handler) (handlers []gin.HandlerFunc) {
 }
 
 // bindV2 实现了 V2 架构的智能复合绑定
-// 核心逻辑：
-// 1. 创建目标结构体实例。
-// 2. 依次尝试从 URI、Header、Query、Body 绑定数据。
-// 3. 在绑定过程中，忽略校验错误（ValidationErrors），允许数据分散在不同来源。
-// 4. 所有来源绑定完成后，执行一次最终的完整校验。
-// 5. 如果校验失败，支持通过 `failtip` 标签自定义错误提示。
 func bindV2(c *gin.Context, typ reflect.Type) (_ reflect.Value, err error) {
     // 确保我们操作的是具体类型（非指针）来创建实例，但绑定时可能需要指针
     isPtr := typ.Kind() == reflect.Ptr
