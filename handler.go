@@ -1,161 +1,179 @@
 package sgin
 
 import (
-	"errors"
-	"fmt"
-	"reflect"
-	"strings"
+    "errors"
+    "fmt"
+    "reflect"
+    "strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
+    "github.com/gin-gonic/gin"
+    "github.com/gin-gonic/gin/binding"
+    "github.com/go-playground/validator/v10"
 )
 
 type Handler any // Gin原生 | sgin V2 智能 Handler
 
 // handler 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
 func handler(r *Route, a ...Handler) (handlers []gin.HandlerFunc) {
-	for _, f := range a {
-		// 1. L0: 优先识别 Gin 原生 Handler
-		switch ginHandler := f.(type) {
-		case gin.HandlerFunc:
-			handlers = append(handlers, ginHandler)
-			continue
-		case func(*gin.Context):
-			handlers = append(handlers, ginHandler)
-			continue
-		}
+    for _, f := range a {
+        // 1. L0: 优先识别 Gin 原生 Handler
+        switch ginHandler := f.(type) {
+        case gin.HandlerFunc:
+            handlers = append(handlers, ginHandler)
+            continue
+        case func(*gin.Context):
+            handlers = append(handlers, ginHandler)
+            continue
+        }
 
-		// 2. L2: 智能反射适配器
-		hValue := reflect.ValueOf(f)
-		hType := hValue.Type()
+        // 2. L2: 智能反射适配器
+        hValue := reflect.ValueOf(f)
+        hType := hValue.Type()
 
-		// --- 启动时自检 (Fail Fast) ---
-		if hType.Kind() != reflect.Func {
-			panic(fmt.Sprintf("Handler must be a function, got %T", f))
-		}
+        // --- 启动时自检 (Fail Fast) ---
+        if hType.Kind() != reflect.Func {
+            panic(fmt.Sprintf("Handler must be a function, got %T", f))
+        }
 
-		numIn := hType.NumIn()
-		if numIn < 1 || numIn > 2 {
-			panic(fmt.Sprintf("Handler accepts 1 or 2 arguments, got %d. Function: %T", numIn, f))
-		}
+        numIn := hType.NumIn()
+        if numIn < 1 || numIn > 2 {
+            panic(fmt.Sprintf("Handler accepts 1 or 2 arguments, got %d. Function: %T", numIn, f))
+        }
 
-		// 检查第一个参数必须是 *Ctx
-		if hType.In(0) != reflect.TypeOf(&Ctx{}) {
-			panic(fmt.Sprintf("Handler's first argument must be *sgin.Ctx. Function: %T", f))
-		}
+        // 检查第一个参数必须是 *Ctx
+        if hType.In(0) != reflect.TypeOf(&Ctx{}) {
+            panic(fmt.Sprintf("Handler's first argument must be *sgin.Ctx. Function: %T", f))
+        }
 
-		// 预先计算是否有第二个参数（请求结构体）
-		var reqType reflect.Type
-		if numIn == 2 {
-			// 允许是指针或结构体，bindV2 会处理
-			reqType = hType.In(1)
-		}
+        // 预先计算是否有第二个参数（请求结构体）
+        var reqType reflect.Type
+        if numIn == 2 {
+            // 允许是指针或结构体，bindV2 会处理
+            reqType = hType.In(1)
+        }
 
-		// --- 生成运行时闭包 ---
-		handlers = append(handlers, func(ginCtx *gin.Context) {
-			// 获取或创建 sgin.Ctx
-			ctx, _ := ginCtx.Keys[CtxKey].(*Ctx)
-			if ctx == nil {
-				ctx = newCtx(ginCtx, r.engine)
-				ginCtx.Set(CtxKey, ctx)
-			}
+        // --- 生成运行时闭包 ---
+        handlers = append(handlers, func(ginCtx *gin.Context) {
+            // 获取或创建 sgin.Ctx
+            ctx, _ := ginCtx.Keys[CtxKey].(*Ctx)
+            if ctx == nil {
+                ctx = newCtx(ginCtx, r.engine)
+                ginCtx.Set(CtxKey, ctx)
+            }
 
-			// 准备参数列表
-			args := make([]reflect.Value, numIn)
-			args[0] = reflect.ValueOf(ctx)
+            // 准备参数列表
+            args := make([]reflect.Value, numIn)
+            args[0] = reflect.ValueOf(ctx)
 
-			// 如果有请求参数，执行智能绑定
-			if numIn == 2 {
-				val, err := bindV2(ginCtx, reqType)
-				if err != nil {
-					// 绑定失败，统一处理错误
-					_ = r.engine.config.ErrorHandler(ctx, &Error{Message: err.Error(), Code: 400})
-					ginCtx.Abort()
-					return
-				}
-				args[1] = val
-			}
+            // 如果有请求参数，执行智能绑定
+            if numIn == 2 {
+                val, err := bindV2(ginCtx, reqType)
+                if err != nil {
+                    // 绑定失败，统一处理错误
+                    _ = r.engine.config.ErrorHandler(ctx, &Error{Message: err.Error(), Code: 400})
+                    ginCtx.Abort()
+                    return
+                }
+                args[1] = val
+            }
 
-			// 反射调用业务逻辑
-			results := hValue.Call(args)
+            // 反射调用业务逻辑
+            results := hValue.Call(args)
 
-			// 结果归一化并发送
-			res := convertToResult(results)
-			ctx.sendResult(res)
-		})
-	}
+            // 结果归一化并发送
+            res := convertToResult(results)
+            ctx.sendResult(res)
+        })
+    }
 
-	return
+    return
 }
 
 // bindV2 实现了 V2 架构的智能复合绑定
-func bindV2(c *gin.Context, T reflect.Type) (_ reflect.Value, err error) {
-	// 确保我们操作的是具体类型（非指针）来创建实例，但绑定时可能需要指针
-	isPtr := T.Kind() == reflect.Ptr
-	baseType := T
-	if isPtr {
-		baseType = T.Elem()
-	}
+// 核心逻辑：
+// 1. 创建目标结构体实例。
+// 2. 依次尝试从 URI、Header、Query、Body 绑定数据。
+// 3. 在绑定过程中，忽略校验错误（ValidationErrors），允许数据分散在不同来源。
+// 4. 所有来源绑定完成后，执行一次最终的完整校验。
+// 5. 如果校验失败，支持通过 `failtip` 标签自定义错误提示。
+func bindV2(c *gin.Context, typ reflect.Type) (_ reflect.Value, err error) {
+    // 确保我们操作的是具体类型（非指针）来创建实例，但绑定时可能需要指针
+    isPtr := typ.Kind() == reflect.Ptr
+    if isPtr {
+        typ = typ.Elem()
+    }
 
-	// 创建一个新的结构体实例
-	// valPtr 是指向该结构体的指针 (例如 *UserReq)
-	valPtr := reflect.New(baseType)
-	ptrInterface := valPtr.Interface()
+    // 创建一个新的结构体实例
+    valPtr := reflect.New(typ) // valPtr 是指向该结构体的指针 (例如 *UserReq)
+    ptr := valPtr.Interface()
 
-	// --- 1. URI 绑定 (Path) ---
-	// 只要有 uri tag，Gin 就会尝试绑定
-	if err = c.ShouldBindUri(ptrInterface); err != nil {
-		return
-	}
+    // 绑定 URI, Header, Query 和 Body 参数，忽略效验错误。
+    if err = tryBind(c.ShouldBindUri, ptr); err == nil {
+        if err = tryBind(c.ShouldBindHeader, ptr); err == nil {
+            err = tryBind(c.ShouldBind, ptr)
+        }
+    }
 
-	// --- 2. Header 绑定 ---
-	if err = c.ShouldBindHeader(ptrInterface); err != nil {
-		return
-	}
+    if err != nil {
+        return
+    }
 
-	// --- 3. Query 绑定 (URL Params) ---
-	// 显式绑定 Query，即使是 POST 请求也可以有 Query 参数
-	if err = c.ShouldBindQuery(ptrInterface); err != nil {
-		return
-	}
+    // 所有数据来源都尝试绑定后，手动触发一次完整校验。
+    // 这是为了捕获之前被 tryBind 忽略的校验错误（如果最终还是缺字段）。
+    if err = binding.Validator.ValidateStruct(ptr); err != nil {
+        var errs validator.ValidationErrors
+        if errors.As(err, &errs) {
+            // 获取第一个校验错误
+            // 使用 StructNamespace (如 "UserReq.Info.Age") 获取字段的层级路径
+            parts := strings.Split(errs[0].StructNamespace(), ".")
 
-	// --- 4. Body 绑定 (互斥) ---
-	// GET 请求通常没有 Body，跳过
-	if ct := c.ContentType(); c.Request.Method != "GET" {
-		// 根据 Content-Type 智能选择
-		if ct == gin.MIMEJSON {
-			err = c.ShouldBindJSON(ptrInterface)
-		} else if ct == gin.MIMEXML {
-			err = c.ShouldBindXML(ptrInterface)
-		} else if ct == gin.MIMEPOSTForm || strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
-			// 对于 Form，Gin 的 ShouldBind 已经涵盖了 Query，但我们为了保险（和拿到 Query 里的 form tag）
-			// 可能会重复绑定，但这是安全的。
-			// 不过，ShouldBind 本身就会做 Query + Form 的混合绑定。
-			// 这里我们显式调用 ShouldBind 用于处理 PostForm
-			err = c.ShouldBind(ptrInterface)
-		}
-	}
+            currentTyp := typ
+            var field reflect.StructField
+            found := true
 
-	if err != nil {
-		// 处理校验错误
-		var vErrs validator.ValidationErrors
-		if errors.As(err, &vErrs) {
-			// 尝试获取 failtip 自定义错误消息
-			for _, e := range vErrs {
-				if field, ok := baseType.FieldByName(e.Field()); ok {
-					if failtip := field.Tag.Get("failtip"); failtip != "" {
-						return reflect.Value{}, errors.New(failtip)
-					}
-				}
-			}
-		}
-		return
-	}
+            // 遍历路径以找到对应的 StructField
+            // parts[0] 是结构体本身的名称，从 parts[1] 开始遍历字段
+            for i := 1; i < len(parts); i++ {
+                f, ok := currentTyp.FieldByName(parts[i])
+                if !ok {
+                    found = false
+                    break
+                }
+                // 如果是嵌套指针或结构体，更新 currentTyp 以便继续查找下一层
+                if field = f; f.Type.Kind() == reflect.Ptr {
+                    currentTyp = f.Type.Elem()
+                } else {
+                    currentTyp = f.Type
+                }
+            }
 
-	// 返回结果
-	if isPtr {
-		return valPtr, nil // 用户要 *T，返回 *T
-	}
+            // 如果找到了字段，且配置了 failtip，则使用自定义错误提示
+            if found {
+                if failtip := field.Tag.Get("failtip"); failtip != "" {
+                    return reflect.Value{}, fmt.Errorf(failtip)
+                }
+            }
+        }
 
-	return valPtr.Elem(), nil // 用户要 T，返回 T
+        return
+    }
+
+    if isPtr { // 用户要 *typ
+        return valPtr, nil // 返回 *typ
+    }
+
+    return valPtr.Elem(), nil // 否则返回 typ
+}
+
+// tryBind 执行绑定操作。
+// 如果是校验错误（validator.ValidationErrors），则忽略并返回 nil，允许从其他来源继续绑定。
+// 如果是其他错误（如解析错误），则直接返回该错误。
+func tryBind(binder func(any) error, ptr any) (err error) {
+    if err = binder(ptr); err != nil {
+        var vErrors validator.ValidationErrors
+        if errors.As(err, &vErrors) {
+            return nil
+        }
+    }
+    return
 }

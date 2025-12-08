@@ -60,6 +60,6 @@ func Logger(c *Ctx) {
     }
 
     if next { // 默认输出 msg，方便终端查看。
-        fmt.Fprintf(gin.DefaultWriter, "%s\n", msg)
+        _, _ = fmt.Fprintf(gin.DefaultWriter, "%s\n", msg)
     }
 }

@@ -9,12 +9,19 @@ import (
     "github.com/gin-gonic/gin"
 )
 
+// Address 定义嵌套结构体
+type Address struct {
+    City string `form:"city" binding:"required" failtip:"城市不能为空"`
+}
+
 // GetUserReq 定义请求结构体
 type GetUserReq struct {
     ID    int    `uri:"id" binding:"required" doc:"用户ID"`
     Type  string `form:"type" default:"guest" doc:"用户类型"`
     Token string `header:"Authorization"` // 这里没有 doc tag，看是否能正常解析
-    Name  string `json:"name" doc:"用户名称"`
+    Name  string `form:"name" doc:"用户名称"`
+    // City  string `form:"city" binding:"required" failtip:"城市不能为空"`
+    Address Address
 }
 
 // UserResp 定义响应结构体
@@ -40,13 +47,13 @@ func main() {
     })
 
     // 注册一个 V2 智能 Handler
-    r.POST("/api/v1/users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
+    r.POST("users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
         fmt.Printf("收到请求: %+v\n", req) // 打印请求内容
 
-        if req.ID <= 0 {
-            // 使用 sgin 的标准化错误
-            return UserResp{}, sgin.ErrBadRequest("用户ID无效")
-        }
+        // if req.ID <= 0 {
+        //     // 使用 sgin 的标准化错误
+        //     return UserResp{}, sgin.ErrBadRequest("用户ID无效")
+        // }
 
         // 模拟业务逻辑
         user := UserResp{
