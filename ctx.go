@@ -2,8 +2,6 @@ package sgin
 
 import (
     "bytes"
-    "crypto/rand"
-    "encoding/hex"
     "fmt"
     "io"
     "mime/multipart"
@@ -13,6 +11,7 @@ import (
     "strings"
 
     "github.com/clbanning/mxj/v2"
+    "github.com/rs/xid"
     "github.com/spf13/cast"
 
     "github.com/bytedance/sonic"
@@ -35,41 +34,33 @@ type Ctx struct {
     Params  gin.Params
     Keys    map[string]any
 
-    traceid string
-    ctx     *gin.Context
-    engine  *Engine
     args    any
+    traceid string
+    engine  *Engine
+    ctx     *gin.Context
 }
 
 func newCtx(ctx *gin.Context, e *Engine) *Ctx {
     c := &Ctx{
         engine:  e,
         ctx:     ctx,
+        traceid: ctx.GetHeader(HeaderXRequestID),
         Request: ctx.Request,
         Writer:  ctx.Writer,
         Params:  ctx.Params,
         Keys:    ctx.Keys,
     }
-    c.initTraceID()
+
+    if c.traceid == "" {
+        c.traceid = xid.New().String()
+        c.SetHeader(HeaderXRequestID, c.traceid)
+    }
+
     return c
 }
 
-func (c *Ctx) initTraceID() {
-    // 优先从 Header 获取
-    traceID := c.Header("X-Request-ID")
-    if traceID == "" {
-        // 生成随机 ID (简单实现: 32字符 hex)
-        b := make([]byte, 16)
-        if _, err := rand.Read(b); err == nil {
-            traceID = hex.EncodeToString(b)
-        }
-    }
-    c.traceid = strings.ToUpper(traceID)
-    c.SetHeader("X-Request-ID", traceID) // 回写到 Response Header
-}
-
-// GetTraceID 获取当前请求的 traceid
-func (c *Ctx) GetTraceID() string {
+// TraceID 获取当前请求的 traceid
+func (c *Ctx) TraceID() string {
     return c.traceid
 }
 

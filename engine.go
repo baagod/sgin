@@ -29,7 +29,7 @@ type Config struct {
 // DefaultErrorHandler 默认的错误处理器
 func DefaultErrorHandler(c *Ctx, err error) error {
     // Status code default is 500
-    code := StatusInternalServerError
+    code := http.StatusInternalServerError
 
     var e *Error
     if errors.As(err, &e) && e.Code > 0 { // 如果是 *Error 错误
