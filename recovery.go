@@ -4,6 +4,7 @@ import (
     "bufio"
     "errors"
     "fmt"
+    "io"
     "net"
     "net/http/httputil"
     "os"
@@ -28,6 +29,13 @@ const (
     bgBlue  = "\033[44m"
 )
 
+// source 存储堆栈的关键信息
+type source struct {
+    file     string
+    line     int
+    funcName string
+}
+
 // Recovery 是一个增强版的错误恢复中间件
 // 它能打印出发生 panic 的具体源代码片段
 func Recovery(c *Ctx) {
@@ -50,34 +58,24 @@ func Recovery(c *Ctx) {
 
             // 获取堆栈信息
             stack := stack(3)
-            httpRequest, _ := httputil.DumpRequest(c.Request, false)
+            req, _ := httputil.DumpRequest(c.Request, false)
             if brokenPipe {
                 // 如果是连接断开，通常不需要打印花哨的日志，安静记录即可
-                fmt.Printf("%s[BROKEN PIPE]%s %s\n%s\n", red, reset, err, string(httpRequest))
+                fmt.Printf("%s[BROKEN PIPE]%s %s\n%s\n", red, reset, err, string(req))
                 _ = gc.Error(err)
                 gc.Abort()
                 return
             }
 
-            // --- 开始漂亮的打印 ---
-            t := time.Now().Format("2006-01-02 15:04:05")
-            fmt.Println()
-            fmt.Printf("%sPANIC RECOVERED BEGIN%s\n", red+bold, reset)
-            fmt.Printf("%sTime:%s     %s\n", green, reset, t)
-            fmt.Printf("%sRequest:%s  %s %s\n", yellow, reset, c.Request.Method, c.Request.URL.Path)
-            fmt.Printf("%sIP:%s       %s\n", yellow, reset, c.IP())
-            fmt.Printf("%sTraceID:%s  %s\n", yellow, reset, c.traceid)
-            fmt.Printf("%sError:%s    %v\n", red, reset, err)
+            // --- 构建漂亮的日志 ---
+            logStr := buildPanicLog(c, err, stack, req)
 
-            // 打印 Headers
-            headers := "  " + strings.ReplaceAll(string(httpRequest), "\n", "\n  ")
-            headers = strings.TrimSuffix(headers, "\n  ")
-            fmt.Printf("%sHeaders:%s\n%s", magenta, reset, headers)
-
-            // 打印源码上下文
-            fmt.Printf("%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line)
-            printSource(stack.file, stack.line)
-            fmt.Printf("\n%sPANIC RECOVERED END%s\n", red+bold, reset)
+            // 输出日志：如果有回调则给回调，否则打印到 Stdout
+            if recovery := c.engine.config.Recovery; recovery != nil {
+                recovery(c, logStr)
+            } else {
+                fmt.Print(logStr)
+            }
 
             _ = c.Send(ErrInternalServerError()) // 返回 500 响应
         }
@@ -86,39 +84,33 @@ func Recovery(c *Ctx) {
     gc.Next()
 }
 
-// source 存储堆栈的关键信息
-type source struct {
-    file     string
-    line     int
-    funcName string
-}
+func buildPanicLog(c *Ctx, err error, stack *source, req []byte) string {
+    var sb strings.Builder
+    t := time.Now().Format("2006-01-02 15:04:05")
 
-// stack 获取调用栈中第一个由于用户代码触发的帧
-func stack(skip int) *source {
-    // 我们最多往上找 32 层
-    for i := skip; i < 32; i++ {
-        pc, file, line, ok := runtime.Caller(i)
-        if !ok {
-            break
-        }
+    sb.WriteString(fmt.Sprintf("\n%sPANIC RECOVERED BEGIN%s\n", red+bold, reset))
+    sb.WriteString(fmt.Sprintf("%sTime:%s     %s\n", green, reset, t))
+    sb.WriteString(fmt.Sprintf("%sRequest:%s  %s %s\n", yellow, reset, c.Request.Method, c.Request.URL.Path))
+    sb.WriteString(fmt.Sprintf("%sIP:%s       %s\n", yellow, reset, c.IP()))
+    sb.WriteString(fmt.Sprintf("%sTraceID:%s  %s\n", yellow, reset, c.traceid))
+    sb.WriteString(fmt.Sprintf("%sError:%s    %v\n", red, reset, err))
 
-        // 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码
-        if !strings.Contains(file, "runtime/") &&
-            !strings.Contains(file, "github.com/gin-gonic/gin") &&
-            !strings.Contains(file, "sgin/recovery.go") /* 过滤自己 */ {
-            return &source{
-                file:     file,
-                line:     line,
-                funcName: runtime.FuncForPC(pc).Name(),
-            }
-        }
-    }
+    // 打印 Headers
+    headers := "  " + strings.ReplaceAll(string(req), "\n", "\n  ")
+    headers = strings.TrimSuffix(headers, "\n  ")
+    sb.WriteString(fmt.Sprintf("%sHeaders:%s\n%s", magenta, reset, headers))
 
-    return &source{}
+    // 打印源码上下文（Killer Feature）
+    sb.WriteString(fmt.Sprintf("\n%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line))
+    printSource(&sb, stack.file, stack.line)
+    sb.WriteString(fmt.Sprintf("\n%sPANIC RECOVERED END%s\n\n", red+bold, reset))
+
+    return sb.String()
 }
 
 // printSource 读取文件并打印出错行及其前后几行
-func printSource(filename string, line int) {
+// writer: 输出目标，通常是 strings.Builder 或 os.Stdout
+func printSource(writer io.Writer, filename string, line int) {
     f, err := os.Open(filename)
     if err != nil {
         return
@@ -146,10 +138,35 @@ func printSource(filename string, line int) {
         if minIndent < 1000 && len(code) >= minIndent {
             code = code[minIndent:]
         }
+
         if lineNum := start + i; lineNum == line {
-            fmt.Printf("  %s%d > %s%s\n", red+bold, lineNum, code, reset)
+            _, _ = fmt.Fprintf(writer, "  %s%d > %s%s\n", red+bold, lineNum, code, reset)
         } else {
-            fmt.Printf("  %s%d   %s%s\n", dim, lineNum, code, reset)
+            _, _ = fmt.Fprintf(writer, "  %s%d   %s%s\n", dim, lineNum, code, reset)
         }
     }
+}
+
+// stack 获取调用栈中第一个由于用户代码触发的帧
+func stack(skip int) *source {
+    // 我们最多往上找 32 层
+    for i := skip; i < 32; i++ {
+        pc, file, line, ok := runtime.Caller(i)
+        if !ok {
+            break
+        }
+
+        // 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码
+        if !strings.Contains(file, "runtime/") &&
+            !strings.Contains(file, "github.com/gin-gonic/gin") &&
+            !strings.Contains(file, "sgin/recovery.go") /* 过滤自己 */ {
+            return &source{
+                file:     file,
+                line:     line,
+                funcName: runtime.FuncForPC(pc).Name(),
+            }
+        }
+    }
+
+    return &source{}
 }
