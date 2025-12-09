@@ -17,8 +17,8 @@ type Engine struct {
 }
 
 type Config struct {
-    Mode           string // gin.DebugMode | gin.ReleaseMode | gin.TestMode
-    TrustedProxies []string
+    Mode           string   // gin.DebugMode | gin.ReleaseMode | gin.TestMode
+    TrustedProxies []string // gin.SetTrustedProxies
     Recovery       func(*Ctx, string)
     ErrorHandler   func(*Ctx, error) error
     // 日志记录器回调，参数为 [文本] 和 [JSON] 消息，返回 true 输出默认日志。
@@ -38,12 +38,14 @@ func DefaultErrorHandler(c *Ctx, err error) error {
         code = stc
     }
 
-    c.Header(HeaderContentType, MIMETextPlainCharsetUTF8)
+    c.Header(HeaderContentType, MIMETextPlainUTF8)
     return c.Status(code).Send(err.Error())
 }
 
-func defaultConfig(config ...Config) Config {
-    cfg := append(config, Config{})[0]
+func defaultConfig(config ...Config) (cfg Config) {
+    if len(config) > 0 {
+        cfg = config[0]
+    }
     if cfg.ErrorHandler == nil {
         cfg.ErrorHandler = DefaultErrorHandler
     }
@@ -57,10 +59,13 @@ func New(config ...Config) *Engine {
     e := &Engine{engine: gin.New(), config: cfg}
     e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
 
-    e.Use(Logger, Recovery) // 注册 [日志] 和 [恢复] 中间件
+    // gin.engine 配置
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-        debugError(err)
+        _, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[GIN] [ERROR] %v\n", err)
     }
+
+    // 注册 [日志] 和 [恢复] 中间件
+    e.Use(Logger, Recovery)
 
     // OpenAPI 文档中间件
     if cfg.OpenAPI {
@@ -68,7 +73,7 @@ func New(config ...Config) *Engine {
             c.JSON(http.StatusOK, globalSpec)
         })
         e.engine.GET("/docs", func(c *gin.Context) {
-            c.Header("Content-Type", "text/html; charset=utf-8")
+            c.Header(HeaderContentType, MIMETextHTMLUTF8)
             c.String(http.StatusOK, swaggerHTML)
         })
     }

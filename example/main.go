@@ -57,11 +57,6 @@ func main() {
     r.GET("users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
         fmt.Printf("收到请求: %+v\n", req) // 打印请求内容
 
-        // if req.ID <= 0 {
-        //     // 使用 sgin 的标准化错误
-        //     return UserResp{}, sgin.ErrBadRequest("用户ID无效")
-        // }
-
         // 模拟业务逻辑
         user := UserResp{
             ID:   req.ID,

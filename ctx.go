@@ -23,7 +23,7 @@ const CtxKey = "_baa/sgin/ctxkey"
 const (
     FormatXML      = "XML"
     FormatJSON     = "JSON"
-    FormatString   = "String"
+    FormatText     = "Text"
     FormatUpload   = "Upload"
     FormatDownload = "Download"
 )
@@ -59,11 +59,6 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
     return c
 }
 
-// TraceID 获取当前请求的 traceid
-func (c *Ctx) TraceID() string {
-    return c.traceid
-}
-
 // ------ 请求参数 ------
 
 func (c *Ctx) Args() (args map[string]any) {
@@ -75,12 +70,12 @@ func (c *Ctx) Args() (args map[string]any) {
     args = map[string]any{}
     ct := c.Header(HeaderContentType)
 
-    if ct == "" || c.Request.Method == "GET" || ct == gin.MIMEPOSTForm {
+    if ct == "" || c.Request.Method == "GET" || ct == MIMEForm {
         _ = c.Request.ParseForm()
         for k, v := range c.Request.Form {
             args[k] = v[0]
         }
-    } else if strings.HasPrefix(ct, gin.MIMEMultipartPOSTForm) {
+    } else if strings.HasPrefix(ct, MIMEMultipartForm) {
         if form, err := c.ctx.MultipartForm(); err == nil {
             for k, v := range form.Value {
                 args[k] = v[0]
@@ -92,12 +87,12 @@ func (c *Ctx) Args() (args map[string]any) {
     }
 
     switch ct {
-    case gin.MIMEJSON:
+    case MIMEJSON:
         r := bytes.NewReader(c.RawBody())
         dec := sonic.ConfigDefault.NewDecoder(r)
         dec.UseNumber()
         _ = dec.Decode(&args)
-    case gin.MIMEXML:
+    case MIMEXML:
         if m, _ := mxj.NewMapXml(c.RawBody()); m != nil {
             args = m
         }
@@ -236,6 +231,11 @@ func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
     return c.ctx.SaveUploadedFile(file, dst)
 }
 
+// TraceID 获取当前请求的 [跟踪ID]
+func (c *Ctx) TraceID() string {
+    return c.traceid
+}
+
 // sendResult 消费内部归一化的响应结果
 func (c *Ctx) sendResult(r *result) {
     // 1. 处理状态码 (如果有显式设置)
@@ -257,64 +257,56 @@ func (c *Ctx) sendResult(r *result) {
 
 // autoFormat 自动根据 Accept 头返回对应类型的数据
 func (c *Ctx) autoFormat(body any, format ...string) {
-    ginCtx := c.ctx
-    if ginCtx.Abort(); body == nil { // 停止请求链
+    gc := c.ctx
+    if gc.Abort(); body == nil { // 停止后续请求链的执行
         return
     }
 
-    // 上传或下载文件
-    responseType := append(format, "")[0]
-    if responseType == FormatUpload || responseType == FormatDownload {
-        file := fmt.Sprint(body)
-        filename := filepath.Base(file)
-        if responseType == FormatDownload {
-            c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+    status := c.StatusCode() // HTTP 状态码
+
+    // 1. 如果指定格式
+    if len(format) > 0 {
+        switch format[0] {
+        case FormatJSON:
+            gc.JSON(status, body)
+        case FormatXML:
+            gc.XML(status, body)
+        case FormatText:
+            gc.String(status, fmt.Sprint(body))
+        case FormatUpload, FormatDownload:
+            file := fmt.Sprint(body)
+            if format[0] == FormatDownload {
+                filename := filepath.Base(file)
+                c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
+            }
+            gc.File(file)
         }
-        ginCtx.File(file)
         return
     }
 
-    // 返回状态码、字符串、错误
-    switch b := body.(type) {
-    case int:
-        ginCtx.Status(b)
-        ginCtx.Writer.WriteHeaderNow()
-        return
-    case error:
-        _ = c.engine.config.ErrorHandler(c, b)
+    // 2. 特殊类型处理
+    if err, ok := body.(error); ok {
+        _ = c.engine.config.ErrorHandler(c, err)
         return
     }
 
-    // 返回响应体
-    status := c.StatusCode()
+    // 3. 按 Accept 头协商
+    // 如果明确只想要 XML 且不包含 HTML (排除浏览器默认行为)，才返回 XML。
+    // 浏览器通常 Accept 包含 text/html 和 application/xml，这里避免误判。
     accept := c.Header(HeaderAccept)
-
-    if responseType == FormatJSON || strings.Contains(accept, gin.MIMEJSON) {
-        ginCtx.JSON(status, body)
+    if (strings.Contains(accept, MIMEXML) || strings.Contains(accept, MIMETextXML)) &&
+        !strings.Contains(accept, MIMETextHTML) {
+        gc.XML(status, body)
         return
     }
 
-    if responseType == FormatXML || strings.Contains(accept, gin.MIMEXML) {
-        if b, ok := body.([]byte); ok { // 返回 []byte
-            body = string(b)
-        }
-        if s, ok := body.(string); ok { // 返回 string
-            ginCtx.String(status, s)
-            return
-        }
-        ginCtx.XML(status, body) // 返回其他
-        return
+    // 4. 默认策略 (按类型推断)
+    switch v := body.(type) {
+    case string:
+        // 如果是字符串，默认为 text/plain
+        gc.String(status, v)
+    default:
+        // 其他类型（包括 struct, map, []byte, int 等），默认为 JSON
+        gc.JSON(status, body)
     }
-
-    bodyType := fmt.Sprintf("%T", body)
-    if responseType == FormatString ||
-        strings.Contains(accept, gin.MIMEHTML) ||
-        strings.Contains(accept, gin.MIMEPlain) ||
-        bodyType == "string" ||
-        bodyType == "[]uint8" /* []byte */ {
-        ginCtx.String(status, fmt.Sprintf("%s", body))
-        return
-    }
-
-    ginCtx.JSON(status, body) // 默认返回 JSON
 }

@@ -29,7 +29,7 @@ func convertToResult(values []reflect.Value) *result {
         case error:
             res.Err = v // 返回的是 error
         default:
-            // 如果Handler只返回一个int，我们默认它就是数据而不是状态码。
+            // 如果 Handler 只返回一个int，我们默认它就是数据而不是状态码。
             // 状态码应该通过 (int, T) 或者 c.Status() 来设置。
             res.Data = v // 返回的是 T (Data)
         }
