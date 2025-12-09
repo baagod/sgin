@@ -11,7 +11,7 @@ import (
 )
 
 type Engine struct {
-    Route
+    Router
     config Config
     engine *gin.Engine
 }
@@ -57,7 +57,7 @@ func New(config ...Config) *Engine {
     gin.SetMode(cfg.Mode)
 
     e := &Engine{engine: gin.New(), config: cfg}
-    e.Route = Route{engine: e, group: &e.engine.RouterGroup, root: true}
+    e.Router = Router{engine: e, group: &e.engine.RouterGroup, root: true}
 
     // gin.engine 配置
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {

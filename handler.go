@@ -14,7 +14,7 @@ import (
 type Handler any // Gin原生 | sgin V2 智能 Handler
 
 // handler 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
-func handler(r *Route, a ...Handler) (handlers []gin.HandlerFunc) {
+func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
     for _, f := range a {
         // 1. L0: 优先识别 Gin 原生 Handler
         switch ginHandler := f.(type) {

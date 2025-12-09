@@ -10,11 +10,11 @@ import (
     "path/filepath"
     "strings"
 
+    "github.com/bytedance/sonic"
     "github.com/clbanning/mxj/v2"
     "github.com/rs/xid"
     "github.com/spf13/cast"
 
-    "github.com/bytedance/sonic"
     "github.com/gin-gonic/gin"
 )
 
@@ -34,10 +34,10 @@ type Ctx struct {
     Params  gin.Params
     Keys    map[string]any
 
-    args    any
-    traceid string
     engine  *Engine
     ctx     *gin.Context
+    cache   map[string]any // 缓存所有请求参数的键值
+    traceid string         // 请求的跟踪ID
 }
 
 func newCtx(ctx *gin.Context, e *Engine) *Ctx {
@@ -59,82 +59,90 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
     return c
 }
 
-// ------ 请求参数 ------
+// ------ 参数解析 (Value/Query) ------
 
-func (c *Ctx) Args() (args map[string]any) {
-    // 已经解析过请求数据
-    if args, _ = c.args.(map[string]any); args != nil {
-        return
+// Values 获取所有参数 (Body 覆盖 Query)
+func (c *Ctx) Values() map[string]any {
+    if c.cache != nil {
+        return c.cache
     }
 
-    args = map[string]any{}
+    c.cache = map[string]any{}
     ct := c.Header(HeaderContentType)
 
-    if ct == "" || c.Request.Method == "GET" || ct == MIMEForm {
-        _ = c.Request.ParseForm()
-        for k, v := range c.Request.Form {
-            args[k] = v[0]
-        }
-    } else if strings.HasPrefix(ct, MIMEMultipartForm) {
-        if form, err := c.ctx.MultipartForm(); err == nil {
-            for k, v := range form.Value {
-                args[k] = v[0]
-            }
-            for k, v := range form.File {
-                args[k] = v[0]
-            }
+    _ = c.Request.ParseForm()
+    for k, v := range c.Request.Form {
+        if len(v) > 0 {
+            c.cache[k] = v[0]
         }
     }
 
-    switch ct {
-    case MIMEJSON:
+    // 处理 JSON
+    if strings.HasPrefix(ct, MIMEJSON) {
         r := bytes.NewReader(c.RawBody())
         dec := sonic.ConfigDefault.NewDecoder(r)
         dec.UseNumber()
-        _ = dec.Decode(&args)
-    case MIMEXML:
+        _ = dec.Decode(&c.cache)
+    } else if strings.HasPrefix(ct, MIMEXML) || strings.HasPrefix(ct, MIMETextXML) {
+        // 处理 XML
         if m, _ := mxj.NewMapXml(c.RawBody()); m != nil {
-            args = m
+            c.cache = m
+        }
+    } else if strings.HasPrefix(ct, MIMEMultipartForm) {
+        // 处理 Multipart Form
+        if form, err := c.ctx.MultipartForm(); err == nil {
+            for k, v := range form.Value {
+                if len(v) > 0 {
+                    c.cache[k] = v[0]
+                }
+            }
+            for k, v := range form.File {
+                if len(v) > 0 {
+                    c.cache[k] = v[0] // *multipart.FileHeader
+                }
+            }
         }
     }
 
-    c.args = args
-    return args
+    return c.cache
 }
 
-func (c *Ctx) Arg(key string, or ...string) string {
-    if v, ok := c.Args()[key]; ok {
-        return fmt.Sprint(v)
+// Value 获取请求参数
+func (c *Ctx) Value(key string, def ...string) string {
+    if len(def) == 0 {
+        return cast.ToString(c.ValueAny(key))
     }
-    return append(or, "")[0]
+    return cast.ToString(c.ValueAny(key, def[0]))
 }
 
-func (c *Ctx) ArgInt(key string, or ...int) int {
-    v, err := cast.ToIntE(c.Arg(key))
-    if err != nil && or != nil {
-        return or[0]
-    }
-    return v
-}
-
-func (c *Ctx) ArgInt64(key string, or ...int64) int64 {
-    v, err := cast.ToInt64E(c.Arg(key))
-    if err != nil && or != nil {
-        return or[0]
+// ValueAny 获取原始类型的参数值
+func (c *Ctx) ValueAny(key string, def ...any) any {
+    v, ok := c.Values()[key]
+    if !ok && len(def) > 0 {
+        return def[0]
     }
     return v
 }
 
-func (c *Ctx) ArgFloat64(key string, or ...float64) float64 {
-    v, err := cast.ToFloat64E(c.Arg(key))
-    if err != nil && or != nil {
-        return or[0]
-    }
-    return v
+func (c *Ctx) ValueInt(key string, def ...any) int {
+    return cast.ToInt(c.ValueAny(key, def...))
 }
 
-func (c *Ctx) ArgBool(key string) bool {
-    return cast.ToBool(c.Arg(key))
+func (c *Ctx) ValueInt64(key string, def ...any) int64 {
+    return cast.ToInt64(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueFloat64(key string, def ...any) float64 {
+    return cast.ToFloat64(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueBool(key string, def ...any) bool {
+    return cast.ToBool(c.ValueAny(key, def...))
+}
+
+// ValueFile 获取上传的文件
+func (c *Ctx) ValueFile(key string) (*multipart.FileHeader, error) {
+    return c.ctx.FormFile(key)
 }
 
 // ------ 响应 ------
