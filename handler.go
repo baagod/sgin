@@ -14,9 +14,9 @@ import (
 type Handler any // Gin原生 | sgin V2 智能 Handler
 
 // handler 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
-func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
+func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
     for _, f := range a {
-        // 1. L0: 优先识别 Gin 原生 Handler
+        // 1. 优先识别 Gin 原生 Handler
         switch ginHandler := f.(type) {
         case gin.HandlerFunc:
             handlers = append(handlers, ginHandler)
@@ -26,7 +26,7 @@ func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
             continue
         }
 
-        // 2. L2: 智能反射适配器
+        // 2. 智能反射适配器
         hValue := reflect.ValueOf(f)
         hType := hValue.Type()
 
@@ -40,7 +40,7 @@ func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
             panic(fmt.Sprintf("Handler accepts 1 or 2 arguments, got %d. Function: %T", numIn, f))
         }
 
-        // 检查第一个参数必须是 *Ctx
+        // 检查第一个参数必须是 *sgin.Ctx
         if hType.In(0) != reflect.TypeOf(&Ctx{}) {
             panic(fmt.Sprintf("Handler's first argument must be *sgin.Ctx. Function: %T", f))
         }
@@ -53,12 +53,12 @@ func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
         }
 
         // --- 生成运行时闭包 ---
-        handlers = append(handlers, func(ginCtx *gin.Context) {
+        handlers = append(handlers, func(gc *gin.Context) {
             // 获取或创建 sgin.Ctx
-            ctx, _ := ginCtx.Keys[CtxKey].(*Ctx)
+            ctx, _ := gc.Keys[CtxKey].(*Ctx)
             if ctx == nil {
-                ctx = newCtx(ginCtx, r.engine)
-                ginCtx.Set(CtxKey, ctx)
+                ctx = newCtx(gc, engine)
+                gc.Set(CtxKey, ctx)
             }
 
             // 准备参数列表
@@ -67,11 +67,10 @@ func handler(r *Router, a ...Handler) (handlers []gin.HandlerFunc) {
 
             // 如果有请求参数，执行智能绑定
             if numIn == 2 {
-                val, err := bindV2(ginCtx, reqType)
-                if err != nil {
-                    // 绑定失败，统一处理错误
-                    _ = r.engine.config.ErrorHandler(ctx, ErrBadRequest(err.Error()))
-                    ginCtx.Abort()
+                val, err := bindV2(gc, reqType)
+                if err != nil { // 绑定失败，统一处理错误
+                    gc.Abort()
+                    _ = engine.cfg.ErrorHandler(ctx, ErrBadRequest(err.Error()))
                     return
                 }
                 args[1] = val

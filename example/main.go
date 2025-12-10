@@ -9,19 +9,12 @@ import (
     "github.com/gin-gonic/gin"
 )
 
-// Address 定义嵌套结构体
-type Address struct {
-    City string `form:"city" binding:"required" failtip:"城市不能为空"`
-}
-
 // GetUserReq 定义请求结构体
 type GetUserReq struct {
     ID    int    `uri:"id" binding:"required" doc:"用户ID"`
     Type  string `form:"type" default:"guest" doc:"用户类型"`
     Token string `header:"Authorization"` // 这里没有 doc tag，看是否能正常解析
     Name  string `form:"name" doc:"用户名称"`
-    // City  string `form:"city" binding:"required" failtip:"城市不能为空"`
-    Address Address
 }
 
 // UserResp 定义响应结构体
@@ -68,6 +61,11 @@ func main() {
     // 简单的健康检查路由
     r.GET("/health", func(c *sgin.Ctx) string {
         return "Service is healthy!"
+    })
+
+    g := r.Group("chat")
+    g.GET("msg", func(c *sgin.Ctx) string {
+        return "msg"
     })
 
     fmt.Println("Sgin 服务器正在端口 :8080 运行...")

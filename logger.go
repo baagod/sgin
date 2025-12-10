@@ -40,7 +40,7 @@ func Logger(c *Ctx) {
 
     // 执行回调或默认输出
     next := true
-    if logger := c.engine.config.Logger; logger != nil {
+    if logger := c.engine.cfg.Logger; logger != nil {
         logMap := map[string]any{ // 生成 JSON 消息
             "time":    t,
             "status":  status,

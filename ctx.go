@@ -170,11 +170,11 @@ func (c *Ctx) Status(code int) *Ctx {
     return c
 }
 
-// Locals 设置或将值存储到上下文
-func (c *Ctx) Locals(key string, value ...any) any {
-    if value != nil {
+// Get 设置或将值存储到上下文
+func (c *Ctx) Get(key string, value ...any) any {
+    if len(value) > 0 {
         c.ctx.Set(key, value[0])
-        return nil
+        return value[0]
     }
     v, _ := c.ctx.Get(key)
     return v
@@ -200,9 +200,9 @@ func (c *Ctx) SetHeader(key string, value string) {
 }
 
 func (c *Ctx) RawBody() (body []byte) {
-    if body, _ = c.Locals(gin.BodyBytesKey).([]byte); body == nil {
+    if body, _ = c.Get(gin.BodyBytesKey).([]byte); body == nil {
         if body, _ = io.ReadAll(c.Request.Body); body != nil {
-            c.Locals(gin.BodyBytesKey, body)
+            c.Get(gin.BodyBytesKey, body)
         }
     }
     return body
@@ -244,6 +244,11 @@ func (c *Ctx) TraceID() string {
     return c.traceid
 }
 
+// Gin 返回底层的 *gin.Context
+func (c *Ctx) Gin() *gin.Context {
+    return c.ctx
+}
+
 // sendResult 消费内部归一化的响应结果
 func (c *Ctx) sendResult(r *result) {
     // 1. 处理状态码 (如果有显式设置)
@@ -253,7 +258,7 @@ func (c *Ctx) sendResult(r *result) {
 
     // 2. 先处理错误
     if r.Err != nil {
-        _ = c.engine.config.ErrorHandler(c, r.Err)
+        _ = c.engine.cfg.ErrorHandler(c, r.Err)
         return
     }
 
@@ -294,7 +299,7 @@ func (c *Ctx) autoFormat(body any, format ...string) {
 
     // 2. 特殊类型处理
     if err, ok := body.(error); ok {
-        _ = c.engine.config.ErrorHandler(c, err)
+        _ = c.engine.cfg.ErrorHandler(c, err)
         return
     }
 

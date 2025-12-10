@@ -71,7 +71,7 @@ func Recovery(c *Ctx) {
             logStr := buildPanicLog(c, err, stack, req)
 
             // 输出日志：如果有回调则给回调，否则打印到 Stdout
-            if recovery := c.engine.config.Recovery; recovery != nil {
+            if recovery := c.engine.cfg.Recovery; recovery != nil {
                 recovery(c, logStr)
             } else {
                 fmt.Print(logStr)
@@ -101,9 +101,9 @@ func buildPanicLog(c *Ctx, err error, stack *source, req []byte) string {
     sb.WriteString(fmt.Sprintf("%sHeaders:%s\n%s", magenta, reset, headers))
 
     // 打印源码上下文（Killer Feature）
-    sb.WriteString(fmt.Sprintf("\n%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line))
+    sb.WriteString(fmt.Sprintf("%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line))
     printSource(&sb, stack.file, stack.line)
-    sb.WriteString(fmt.Sprintf("\n%sPANIC RECOVERED END%s\n\n", red+bold, reset))
+    sb.WriteString(fmt.Sprintf("%sPANIC RECOVERED END%s\n\n", red+bold, reset))
 
     return sb.String()
 }

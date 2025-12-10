@@ -5,10 +5,10 @@ import (
     "strings"
 )
 
-// --- OpenAPI 3.2.0 基础结构 (OA 前缀避免命名冲突) ---
+// --- OpenAPI 3.2.0 基础结构 ---
 
 type OpenAPISpec struct {
-    OpenAPI    string                `json:"openapi"` // "3.1.0"
+    OpenAPI    string                `json:"openapi"`
     Info       OAInfo                `json:"info"`
     Paths      map[string]OAPathItem `json:"paths"`
     Components OAComponents          `json:"components"`
@@ -71,7 +71,7 @@ type OASchema struct {
 
 // 全局 OpenAPI 实例
 var globalSpec = &OpenAPISpec{
-    OpenAPI: "3.1.0", // 使用 3.1.0 以保证兼容性
+    OpenAPI: "3.2.0",
     Info: OAInfo{
         Title:   "Sgin API",
         Version: "1.0.0",
@@ -83,7 +83,7 @@ var globalSpec = &OpenAPISpec{
 }
 
 // AnalyzeAndRegister 分析 Handler 并注册到 OpenAPI
-func AnalyzeAndRegister(path string, method string, handler any) {
+func AnalyzeAndRegister(path string, method string, handler Handler) {
     t := reflect.TypeOf(handler)
     if t.Kind() != reflect.Func {
         return
@@ -193,14 +193,6 @@ func (op *OAOperation) parseRequest(t reflect.Type) {
             })
         }
     }
-
-    // Body 处理逻辑应更精确，不能简单通过 hasJSON 标记
-    // 应该检查是否存在一个匿名字段或者一个明确标记为 Body 的字段
-    // 暂时移除，等待 M4 阶段对 RequestBody 的精细化解析
-    // 或者：我们可以引入一个 `body:"true"` 这样的标签来明确指定哪个字段是 Body
-    // 例如：Body struct { SomeField string `json:"some_field"` } `body:"true"`
-    // 考虑到目前的实现，简单地假设整个 Request struct 如果有 json tag，就是 Body
-    // 但这与前面 Parameters 的处理有冲突 (同名字段可能被多次处理)
 }
 
 // parseResponse 解析响应
@@ -289,25 +281,30 @@ func structToSchema(t reflect.Type) *OASchema {
 const swaggerHTML = `
 <!doctype html>
 <html>
-  <head>
-    <title>API Reference</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { margin: 0; }
-    </style>
-  </head>
-  <body>
-    <script
-      id="api-reference"
-      data-url="/openapi.json"
-      data-configuration='{
-        "theme": "default",
-        "layout": "modern",
-        "hiddenClients": true
-      }'
-      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"
-    ></script>
-  </body>
+    <head>
+        <title>API Reference</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+            body { margin: 0; }
+        </style>
+    </head>
+
+    <body>
+        <div id="app"></div>
+        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+        <script>
+            Scalar.createApiReference('#app', {
+                url: '/openapi.json', // OpenAPI/Swagger 文档地址
+                theme: 'purple', // 主题
+                defaultOpenAllTags: true,
+                hiddenClients: true,
+                hideClientButton: true,
+                expandAllResponses: true,
+                expandAllModelSections: true,
+                proxyUrl: 'https://proxy.scalar.com', // 避免 CORS 问题
+            })
+        </script>
+    </body>
 </html>
 `

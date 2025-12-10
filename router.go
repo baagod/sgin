@@ -8,30 +8,25 @@ import (
 )
 
 type IRouter interface {
-    Use(args ...Handler) IRouter
-    GET(path string, handlers ...Handler) IRouter
-    POST(path string, handlers ...Handler) IRouter
-    PUT(path string, handlers ...Handler) IRouter
-    DELETE(path string, handlers ...Handler) IRouter
-    Group(path string, handlers ...Handler) IRouter
+    Use(...Handler) IRouter
+    GET(string, ...Handler) IRouter
+    POST(string, ...Handler) IRouter
+    PUT(string, ...Handler) IRouter
+    DELETE(string, ...Handler) IRouter
+    Group(string, ...Handler) IRouter
     Handle(method, path string, handlers ...Handler) IRouter
     Static(path, root string) IRouter
 }
 
 type Router struct {
-    group  *gin.RouterGroup
-    engine *Engine
-    root   bool
+    i    gin.IRouter
+    e    *Engine
+    base string // 基础路径
 }
 
 func (r *Router) Use(args ...Handler) IRouter {
-    handlers := handler(r, args...)
-    if r.root {
-        r.engine.engine.Use(handlers...)
-    } else {
-        r.group.Use(handlers...)
-    }
-    return r.router()
+    r.i.Use(handler(r.e, args...)...)
+    return r
 }
 
 func (r *Router) GET(path string, handlers ...Handler) IRouter {
@@ -51,33 +46,26 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 }
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
-    grp := r.group.Group(path, handler(r, handlers...)...)
-    return &Router{group: grp, engine: r.engine}
+    grp := r.i.Group(path, handler(r.e, handlers...)...)
+    return &Router{i: grp, e: r.e, base: r.fullPath(path)}
 }
 
-func (r *Router) Handle(method string, path string, handlers ...Handler) IRouter {
-    if r.engine.config.OpenAPI {
-        fullPath := r.group.BasePath() + path
-        // 移除可能重复的斜杠
-        if strings.Contains(fullPath, "//") {
-            fullPath = strings.ReplaceAll(fullPath, "//", "/")
-        }
+func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
+    if r.e.cfg.OpenAPI {
+        fullPath := r.fullPath(path)
         for _, h := range handlers {
             AnalyzeAndRegister(fullPath, method, h)
         }
     }
-    r.group.Handle(method, path, handler(r, handlers...)...)
-    return r.router()
+    r.i.Handle(method, path, handler(r.e, handlers...)...)
+    return r
 }
 
 func (r *Router) Static(path, root string) IRouter {
-    r.group.Static(path, root)
-    return r.router()
+    r.i.Static(path, root)
+    return r
 }
 
-func (r *Router) router() IRouter {
-    if r.root {
-        return r.engine
-    }
-    return r
+func (r *Router) fullPath(path string) string {
+    return strings.ReplaceAll(r.base+path, "//", "/")
 }
