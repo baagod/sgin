@@ -16,16 +16,27 @@ type IRouter interface {
     Group(string, ...Handler) IRouter
     Handle(method, path string, handlers ...Handler) IRouter
     Static(path, root string) IRouter
+    Security(schemes ...string) IRouter
 }
 
 type Router struct {
-    i    gin.IRouter
-    e    *Engine
-    base string // 基础路径
+    i        gin.IRouter
+    e        *Engine
+    base     string                  // 基础路径
+    security []OASecurityRequirement // 路由组安全配置
 }
 
 func (r *Router) Use(args ...Handler) IRouter {
     r.i.Use(handler(r.e, args...)...)
+    return r
+}
+
+func (r *Router) Security(schemes ...string) IRouter {
+    for _, scheme := range schemes {
+        r.security = append(r.security, OASecurityRequirement{
+            scheme: {},
+        })
+    }
     return r
 }
 
@@ -47,14 +58,14 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
     grp := r.i.Group(path, handler(r.e, handlers...)...)
-    return &Router{i: grp, e: r.e, base: r.fullPath(path)}
+    return &Router{i: grp, e: r.e, base: r.fullPath(path), security: r.security}
 }
 
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
     if r.e.cfg.OpenAPI {
         fullPath := r.fullPath(path)
         for _, h := range handlers {
-            AnalyzeAndRegister(fullPath, method, h)
+            AnalyzeAndRegister(fullPath, method, h, r.security)
         }
     }
     r.i.Handle(method, path, handler(r.e, handlers...)...)

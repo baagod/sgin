@@ -1,13 +1,24 @@
 package main
 
 import (
-    "errors"
     "fmt"
-    "net/http"
+    "strings"
+    "time"
 
     "github.com/baagod/sgin"
     "github.com/gin-gonic/gin"
 )
+
+// AuthMiddleware 模拟一个鉴权中间件
+func AuthMiddleware(c *sgin.Ctx) error {
+    token := c.Header("Authorization")
+    if !strings.HasPrefix(token, "Bearer ") {
+        return c.Send(sgin.ErrUnauthorized("Missing or invalid token"))
+    }
+    // 假设验证通过，将用户ID存入 Context
+    c.Get("userID", "user123")
+    return c.Next()
+}
 
 // GetUserReq 定义请求结构体
 type GetUserReq struct {
@@ -19,8 +30,9 @@ type GetUserReq struct {
 
 // UserResp 定义响应结构体
 type UserResp struct {
-    ID   int    `json:"id"`
-    Info string `json:"info"`
+    ID   int       `json:"id"`
+    Info string    `json:"info"`
+    Time time.Time `json:"time"`
 }
 
 func main() {
@@ -28,44 +40,33 @@ func main() {
     r := sgin.New(sgin.Config{
         Mode:    gin.DebugMode, // 调试模式
         OpenAPI: true,          // 开启 OpenAPI 文档
-        ErrorHandler: func(c *sgin.Ctx, err error) error { // 示例自定义错误处理
-            var apiErr *sgin.Error
-            if errors.As(err, &apiErr) {
-                // 如果是 APIError，使用它提供的状态码和信息
-                return c.Status(apiErr.Code).Send(gin.H{"code": apiErr.Code, "message": apiErr.Error()})
-            }
-            // 否则，返回通用的 500 错误
-            return c.Status(http.StatusInternalServerError).Send(gin.H{"code": http.StatusInternalServerError, "message": "Internal Server Error"})
-        },
-    })
-
-    // 制造一个 Panic 来测试 Recovery
-    r.GET("/panic", func(c *sgin.Ctx) any {
-        // 模拟空指针异常
-        var user *UserResp
-        return user.ID // 这里会 Panic
     })
 
     // 注册一个 V2 智能 Handler
-    r.GET("users/:id", func(c *sgin.Ctx, req GetUserReq) (UserResp, error) {
-        fmt.Printf("收到请求: %+v\n", req) // 打印请求内容
-
-        // 模拟业务逻辑
+    r.GET("users/:id", func(c *sgin.Ctx, q GetUserReq) (UserResp, error) { // 修改为不接收 req struct
         user := UserResp{
-            ID:   req.ID,
-            Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", req.Type, req.Token, req.Name),
+            ID:   q.ID,
+            Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", q.Type, q.Token, q.Name),
+            Time: time.Now(),
         }
         return user, nil
+    })
+
+    // 私有路由组，需要鉴权
+    secure := r.Group("/api/v1", AuthMiddleware).Security("bearerAuth")
+    secure.GET("/secure", func(c *sgin.Ctx) (gin.H, error) {
+        userID := c.Get("userID").(string) // 从 Context 中获取中间件设置的用户ID
+        token := c.Header("Authorization")
+        return gin.H{
+            "message": "Welcome to the secure area!",
+            "userID":  userID,
+            "token":   token,
+        }, nil
     })
 
     // 简单的健康检查路由
     r.GET("/health", func(c *sgin.Ctx) string {
         return "Service is healthy!"
-    })
-
-    g := r.Group("chat")
-    g.GET("msg", func(c *sgin.Ctx) string {
-        return "msg"
     })
 
     fmt.Println("Sgin 服务器正在端口 :8080 运行...")

@@ -68,7 +68,7 @@ func New(config ...Config) *Engine {
     e.Use(Logger, Recovery)
 
     // OpenAPI 文档中间件
-    if cfg.OpenAPI {
+    if cfg.Mode != gin.ReleaseMode && cfg.OpenAPI {
         e.engine.GET("/openapi.json", func(c *gin.Context) {
             c.JSON(http.StatusOK, globalSpec)
         })
