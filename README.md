@@ -26,7 +26,7 @@ r.Run(":8080")
 
 ## 处理方法
 
-`sgin` 主要修改了原生处理函数，处理函数的签名变成了：`func(*sgin.Ctx[, T]) T | (int, T) | (T, error)` 。
+`sgin` 主要修改了原生处理函数，处理函数的签名变成了：`func(*sgin.Ctx[, T]) T | (T, error)` 。
 
 ### 接收请求参数
 

@@ -44,15 +44,15 @@ func main() {
     })
 
     // 注册一个 V2 智能 Handler
-    // r.GET("users/:id", func(c *sgin.Ctx, q GetUserReq) (UserResp, error) { // 修改为不接收 req struct
-    //     user := UserResp{
-    //         ID:   q.ID,
-    //         Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", q.Type, q.Token, q.Name),
-    //         Time: time.Now(),
-    //     }
-    //     return user, nil
-    // })
-    //
+    r.GET("users/:id", func(c *sgin.Ctx, q GetUserReq) (UserResp, error) {
+        user := UserResp{
+            ID:   q.ID,
+            Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", q.Type, q.Token, q.Name),
+            Time: time.Now(),
+        }
+        return user, nil
+    })
+
     // // 私有路由组，需要鉴权
     // secure := r.Group("/api/v1", AuthMiddleware, func(op *sgin.OAOperation) {
     //     op.Security = []sgin.OARequirement{{"bearerAuth": {}}}
@@ -72,9 +72,9 @@ func main() {
     //     }, nil
     // })
 
-    r.GET("/test", func(c *sgin.Ctx, i UserResp) *UserResp {
-        return &UserResp{}
-    })
+    // r.GET("/test", func(c *sgin.Ctx, i UserResp) *UserResp {
+    //     return &UserResp{}
+    // })
 
     // 简单的健康检查路由
     // r.GET("/health", func(c *sgin.Ctx) string {

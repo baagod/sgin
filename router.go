@@ -48,34 +48,34 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 }
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
-    realHandlers, opOption := separateHandlers(handlers)
+    realHandlers, operation := separateHandlers(handlers)
     grp := r.i.Group(path, handler(r.e, realHandlers...)...)
 
-    op := OAOperation{Responses: map[string]OAResponse{}}
-    if opOption != nil {
-        opOption(&op)
+    op := OAOperation{
+        Responses: map[string]OAResponse{},
+        Security:  []OARequirement{{}},
+    }
+
+    if operation != nil {
+        operation(&op)
     }
 
     return &Router{i: grp, e: r.e, base: r.fullPath(path), op: op}
 }
 
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
-    realHandlers, operation := separateHandlers(handlers)
+    realHandlers, operation := separateHandlers(handlers) // 在这里声明并赋值
 
     if r.e.cfg.OpenAPI {
-        // 基于当前 Router 的 op 原型克隆一个新的 OAOperation，用于当前路由
-        opForThisRoute := r.op.Clone()
+        fullPath := r.fullPath(path)
+        cloneOp := r.op.Clone()
 
-        // 应用路由级别传入的 AddOperation 到这个克隆的 op 上
         if operation != nil {
-            operation(r.op.Clone())
+            operation(cloneOp)
         }
 
-        // 将克隆并应用了选项的 op 传递给 AnalyzeAndRegister
-        // AnalyzeAndRegister 只需要知道最终的 OAOperation
         if len(realHandlers) > 0 {
-            fullPath := r.fullPath(path)
-            AnalyzeAndRegister(fullPath, method, realHandlers[len(realHandlers)-1], opForThisRoute)
+            AnalyzeAndRegister(fullPath, method, realHandlers[len(realHandlers)-1], cloneOp)
         }
     }
 

@@ -15,21 +15,23 @@ type (
     AddOperation func(*OAOperation)
     // OARequirement e.g., {"bearerAuth": []}
     OARequirement map[string][]string
+    // OAPathItem 对应一个路径下的操作集合 (Method -> Operation)
+    OAPathItem map[string]OAOperation
 )
 
 // --- OpenAPI 基础结构 ---
 
-type OpenAPISpec struct {
+type OpenAPI struct {
     OpenAPI    string                `yaml:"openapi"`
     Info       OAInfo                `yaml:"info"`
     Paths      map[string]OAPathItem `yaml:"paths"`
     Components OAComponents          `yaml:"components"`
-    Security   []OARequirement       `yaml:"security,omitempty"` // 全局安全配置
+    Security   []OARequirement       `yaml:"security,omitempty"`
     Tags       []OATag               `yaml:"tags,omitempty"`
 }
 
-// YAML returns the OpenAPI spec in YAML format.
-func (o *OpenAPISpec) YAML() ([]byte, error) {
+// YAML 返回 YAML 格式的 OpenAPI 规范
+func (o *OpenAPI) YAML() ([]byte, error) {
     var buf bytes.Buffer
     enc := yaml.NewEncoder(&buf)
     enc.SetIndent(2)
@@ -52,20 +54,17 @@ type OATag struct {
     Description string `yaml:"description,omitempty"`
 }
 
-// OAPathItem 对应一个路径下的操作集合 (Method -> Operation)
-type OAPathItem map[string]OAOperation
-
 type OAOperation struct {
     Summary     string                `yaml:"summary,omitempty"`
     Description string                `yaml:"description,omitempty"`
-    Parameters  []OAParameter         `yaml:"parameters,omitempty"`
+    Parameters  []OAParam             `yaml:"parameters,omitempty"`
     RequestBody *OARequestBody        `yaml:"requestBody,omitempty"`
     Responses   map[string]OAResponse `yaml:"responses"`
     Security    []OARequirement       `yaml:"security,omitempty"`
     Tags        []string              `yaml:"tags,omitempty"`
 }
 
-// Clone returns a deep copy of the OAOperation.
+// Clone 返回一份深度的 OAOperation 副本
 func (o *OAOperation) Clone() *OAOperation {
     if o == nil {
         return nil
@@ -77,7 +76,7 @@ func (o *OAOperation) Clone() *OAOperation {
     return &clone
 }
 
-type OAParameter struct {
+type OAParam struct {
     Name        string    `yaml:"name"`
     In          string    `yaml:"in"` // "query", "header", "path", "cookie"
     Required    bool      `yaml:"required"`
@@ -127,7 +126,7 @@ type OASchema struct {
 }
 
 // 全局 OpenAPI 实例
-var globalSpec = &OpenAPISpec{
+var globalSpec = &OpenAPI{
     OpenAPI: OpenAPIVersion,
     Info: OAInfo{
         Title:   "Sgin API",
@@ -230,6 +229,8 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
         return
     }
 
+    bodySchema := &OASchema{Type: "object", Properties: map[string]*OASchema{}}
+
     for i := 0; i < t.NumField(); i++ {
         field := t.Field(i)
         desc := field.Tag.Get("doc")
@@ -237,24 +238,55 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
         // 提取 Tag
         if tag := field.Tag.Get("uri"); tag != "" {
             addParam(op, tag, "path", true, desc, field.Type)
+            continue
         }
 
         if tag := field.Tag.Get("form"); tag != "" {
             required := strings.Contains(field.Tag.Get("binding"), "required")
             addParam(op, tag, "query", required, desc, field.Type)
+            continue
         }
 
         if tag := field.Tag.Get("header"); tag != "" {
             required := strings.Contains(field.Tag.Get("binding"), "required")
             addParam(op, tag, "header", required, desc, field.Type)
+            continue
         }
 
-        // TODO: 处理 Body (JSON) - 可以在这里检测 json tag 并生成 RequestBody
+        // 处理 Body (JSON) - 如果没有被其他标签捕获，则视为 JSON Body 字段
+        jsonTag := field.Tag.Get("json")
+        if jsonTag == "-" {
+            continue // 显式忽略
+        }
+
+        propName := field.Name
+        if jsonTag != "" {
+            propName = strings.Split(jsonTag, ",")[0]
+        }
+
+        // 确保字段 Schema 不为空
+        if propSchema := getSchema(field.Type); propSchema != nil {
+            propSchema.Description = desc
+            bodySchema.Properties[propName] = propSchema
+
+            if strings.Contains(field.Tag.Get("binding"), "required") {
+                bodySchema.Required = append(bodySchema.Required, propName)
+            }
+        }
+    }
+
+    // 如果 bodySchema 中有任何属性，才将其添加到 RequestBody
+    if len(bodySchema.Properties) > 0 {
+        op.RequestBody = &OARequestBody{
+            Content: map[string]OAMediaType{
+                "application/json": {Schema: bodySchema},
+            },
+        }
     }
 }
 
 func addParam(op *OAOperation, name, in string, required bool, desc string, t reflect.Type) {
-    op.Parameters = append(op.Parameters, OAParameter{
+    op.Parameters = append(op.Parameters, OAParam{
         Name:        name,
         In:          in,
         Required:    required,
