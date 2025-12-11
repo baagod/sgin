@@ -197,3 +197,26 @@ func TestScalarDocs(t *testing.T) {
 		t.Error("data-url configuration not found in HTML")
 	}
 }
+
+// TestOpenAPIYAML 测试 OpenAPI YAML 文档
+func TestOpenAPIYAML(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := New(Config{OpenAPI: true})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/openapi.yaml", nil)
+	r.engine.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("Expected 200 OK for /openapi.yaml, got %d", w.Code)
+	}
+
+	if w.Header().Get("Content-Type") != "text/yaml; charset=utf-8" {
+		t.Errorf("Expected Content-Type text/yaml, got %s", w.Header().Get("Content-Type"))
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "openapi: 3.2.0") {
+		t.Error("YAML content check failed")
+	}
+}

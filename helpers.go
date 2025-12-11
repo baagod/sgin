@@ -7,6 +7,7 @@ const (
     MIMETextPlain      = "text/plain"
     MIMETextJavaScript = "text/javascript"
     MIMETextCSS        = "text/css"
+    MIMETextYAML       = "text/yaml"
     MIMEXML            = "application/xml"
     MIMEJSON           = "application/json"
     MIMEJavaScript     = "application/javascript"
@@ -21,6 +22,7 @@ const (
     MIMETextPlainUTF8      = "text/plain; charset=utf-8"
     MIMETextJavaScriptUTF8 = "text/javascript; charset=utf-8"
     MIMETextCSSUTF8        = "text/css; charset=utf-8"
+    MIMETextYAMLUTF8       = "text/yaml; charset=utf-8"
     MIMEXMLUTF8            = "application/xml; charset=utf-8"
     MIMEJSONUTF8           = "application/json; charset=utf-8"
 )

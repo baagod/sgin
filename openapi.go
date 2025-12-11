@@ -1,88 +1,110 @@
 package sgin
 
 import (
+    "bytes"
     "reflect"
     "strings"
+
+    "gopkg.in/yaml.v3"
 )
 
 const OpenAPIVersion = "3.1"
 
 // --- OpenAPI 基础结构 ---
 
-type OASecurityRequirement map[string][]string // e.g., {"bearerAuth": []}
+type OARequirement map[string][]string // e.g., {"bearerAuth": []}
 
 type OpenAPISpec struct {
-    OpenAPI    string                  `json:"openapi"`
-    Info       OAInfo                  `json:"info"`
-    Paths      map[string]OAPathItem   `json:"paths"`
-    Components OAComponents            `json:"components"`
-    Security   []OASecurityRequirement `json:"security,omitempty"` // 全局安全配置
-    Servers    []map[string]any        `json:"servers,omitempty"`
+    OpenAPI    string                `yaml:"openapi"`
+    Info       OAInfo                `yaml:"info"`
+    Paths      map[string]OAPathItem `yaml:"paths"`
+    Components OAComponents          `yaml:"components"`
+    Security   []OARequirement       `yaml:"security,omitempty"` // 全局安全配置
+    Tags       []OATag               `yaml:"tags,omitempty"`
+}
+
+// YAML returns the OpenAPI spec in YAML format.
+func (o *OpenAPISpec) YAML() ([]byte, error) {
+    var buf bytes.Buffer
+    enc := yaml.NewEncoder(&buf)
+    enc.SetIndent(2)
+
+    if err := enc.Encode(o); err != nil {
+        return nil, err
+    }
+
+    _ = enc.Close()
+    return buf.Bytes(), nil
 }
 
 type OAInfo struct {
-    Title   string `json:"title"`
-    Version string `json:"version"`
+    Title   string `yaml:"title"`
+    Version string `yaml:"version"`
+}
+
+type OATag struct {
+    Name        string `yaml:"name"`
+    Description string `yaml:"description,omitempty"`
 }
 
 // OAPathItem 对应一个路径下的操作集合 (Method -> Operation)
 type OAPathItem map[string]OAOperation
 
 type OAOperation struct {
-    Summary     string                  `json:"summary,omitempty"`
-    Description string                  `json:"description,omitempty"`
-    Parameters  []OAParameter           `json:"parameters,omitempty"`
-    RequestBody *OARequestBody          `json:"requestBody,omitempty"`
-    Responses   map[string]OAResponse   `json:"responses"`
-    Security    []OASecurityRequirement `json:"security,omitempty"`
-    Tags        []string                `json:"tags,omitempty"`
+    Summary     string                `yaml:"summary,omitempty"`
+    Description string                `yaml:"description,omitempty"`
+    Parameters  []OAParameter         `yaml:"parameters,omitempty"`
+    RequestBody *OARequestBody        `yaml:"requestBody,omitempty"`
+    Responses   map[string]OAResponse `yaml:"responses"`
+    Security    []OARequirement       `yaml:"security,omitempty"`
+    Tags        []string              `yaml:"tags,omitempty"`
 }
 
 type OAParameter struct {
-    Name        string    `json:"name"`
-    In          string    `json:"in"` // "query", "header", "path", "cookie"
-    Required    bool      `json:"required"`
-    Description string    `json:"description,omitempty"`
-    Schema      *OASchema `json:"schema,omitempty"`
+    Name        string    `yaml:"name"`
+    In          string    `yaml:"in"` // "query", "header", "path", "cookie"
+    Required    bool      `yaml:"required"`
+    Description string    `yaml:"description,omitempty"`
+    Schema      *OASchema `yaml:"schema,omitempty"`
 }
 
 type OARequestBody struct {
-    Description string                 `json:"description,omitempty"`
-    Content     map[string]OAMediaType `json:"content"`
-    Required    bool                   `json:"required"`
+    Description string                 `yaml:"description,omitempty"`
+    Content     map[string]OAMediaType `yaml:"content"`
+    Required    bool                   `yaml:"required"`
 }
 
 type OAResponse struct {
-    Description string                 `json:"description"`
-    Content     map[string]OAMediaType `json:"content,omitempty"`
+    Description string                 `yaml:"description"`
+    Content     map[string]OAMediaType `yaml:"content,omitempty"`
 }
 
 type OAMediaType struct {
-    Schema *OASchema `json:"schema"`
+    Schema *OASchema `yaml:"schema"`
 }
 
 type OAComponents struct {
-    Schemas         map[string]*OASchema        `json:"schemas,omitempty"`
-    SecuritySchemes map[string]OASecurityScheme `json:"securitySchemes,omitempty"`
+    Schemas         map[string]*OASchema        `yaml:"schemas,omitempty"`
+    SecuritySchemes map[string]OASecurityScheme `yaml:"securitySchemes,omitempty"`
 }
 
 type OASecurityScheme struct {
-    Type         string `json:"type"`                   // "http", "apiKey", "oauth2"
-    Scheme       string `json:"scheme,omitempty"`       // "bearer" (for HTTP)
-    BearerFormat string `json:"bearerFormat,omitempty"` // "JWT" (for bearer)
-    Name         string `json:"name,omitempty"`         // Header name for apiKey
-    In           string `json:"in,omitempty"`           // "header" for apiKey
+    Type         string `yaml:"type"`                   // "http", "apiKey", "oauth2"
+    Scheme       string `yaml:"scheme,omitempty"`       // "bearer" (for HTTP)
+    BearerFormat string `yaml:"bearerFormat,omitempty"` // "JWT" (for bearer)
+    Name         string `yaml:"name,omitempty"`         // Header name for apiKey
+    In           string `yaml:"in,omitempty"`           // "header" for apiKey
 }
 
 type OASchema struct {
-    Type        string               `json:"type,omitempty"`
-    Format      string               `json:"format,omitempty"`
-    Properties  map[string]*OASchema `json:"properties,omitempty"`
-    Items       *OASchema            `json:"items,omitempty"` // For arrays
-    Required    []string             `json:"required,omitempty"`
-    Description string               `json:"description,omitempty"`
-    Example     any                  `json:"example,omitempty"`
-    Ref         string               `json:"$ref,omitempty"`
+    Type        string               `yaml:"type,omitempty"`
+    Format      string               `yaml:"format,omitempty"`
+    Properties  map[string]*OASchema `yaml:"properties,omitempty"`
+    Items       *OASchema            `yaml:"items,omitempty"` // For arrays
+    Required    []string             `yaml:"required,omitempty"`
+    Description string               `yaml:"description,omitempty"`
+    Example     any                  `yaml:"example,omitempty"`
+    Ref         string               `yaml:"$ref,omitempty"`
 }
 
 // 全局 OpenAPI 实例
@@ -103,22 +125,22 @@ var globalSpec = &OpenAPISpec{
             },
         },
     },
-    Security: []OASecurityRequirement{
+    Security: []OARequirement{
         {"bearerAuth": {}},
     },
 }
 
-// AnalyzeAndRegister 分析 Handler 并注册到 OpenAPI
-func AnalyzeAndRegister(path string, method string, handler Handler, security []OASecurityRequirement) {
+func AnalyzeAndRegister(path string, method string, handler Handler, security []OARequirement, tags []string) {
     t := reflect.TypeOf(handler)
     if t.Kind() != reflect.Func {
         return
     }
 
-    if len(security) == 0 {
-        security = make([]OASecurityRequirement, 1)
+    op := OAOperation{
+        Responses: make(map[string]OAResponse),
+        Security:  security,
+        Tags:      tags, // 赋值
     }
-    op := OAOperation{Responses: map[string]OAResponse{}, Security: security}
 
     // 1. 分析入参 (Request)
     // 假设第二个参数是请求结构体 func(c *Ctx, req *UserReq)
@@ -141,10 +163,10 @@ func AnalyzeAndRegister(path string, method string, handler Handler, security []
     parseResponseBody(&op, resType)
 
     // 3. 注册到全局 Spec
-    registerOperation(path, method, op)
+    registerOperation(path, method, op, tags)
 }
 
-func registerOperation(path string, method string, op OAOperation) {
+func registerOperation(path string, method string, op OAOperation, tags []string) {
     if globalSpec.Paths == nil {
         globalSpec.Paths = make(map[string]OAPathItem)
     }
@@ -154,6 +176,20 @@ func registerOperation(path string, method string, op OAOperation) {
         globalSpec.Paths[openAPIPath] = make(OAPathItem)
     }
     globalSpec.Paths[openAPIPath][strings.ToLower(method)] = op
+
+    // 将标签添加到全局列表 (去重)
+    for _, tagName := range tags {
+        found := false
+        for _, existingTag := range globalSpec.Tags {
+            if existingTag.Name == tagName {
+                found = true
+                break
+            }
+        }
+        if !found {
+            globalSpec.Tags = append(globalSpec.Tags, OATag{Name: tagName})
+        }
+    }
 }
 
 func convertPath(path string) string {
@@ -340,7 +376,7 @@ const swaggerHTML = `
     </head>
     <body>
         <elements-api
-            apiDescriptionUrl="openapi.json"
+            apiDescriptionUrl="/openapi.yaml"
             router="hash"
         />
     </body>

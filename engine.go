@@ -68,13 +68,18 @@ func New(config ...Config) *Engine {
     e.Use(Logger, Recovery)
 
     // OpenAPI 文档中间件
-    if cfg.Mode != gin.ReleaseMode && cfg.OpenAPI {
-        e.engine.GET("/openapi.json", func(c *gin.Context) {
-            c.JSON(http.StatusOK, globalSpec)
+    if cfg.OpenAPI && cfg.Mode != gin.ReleaseMode {
+        e.GET("/openapi.yaml", func(c *Ctx) error {
+            if specYAML, err := globalSpec.YAML(); err == nil {
+                c.Header(HeaderContentType, MIMETextYAMLUTF8)
+                return c.Send(string(specYAML))
+            }
+            return c.Send(ErrInternalServerError())
         })
-        e.engine.GET("/docs", func(c *gin.Context) {
+
+        e.GET("/docs", func(c *Ctx) error {
             c.Header(HeaderContentType, MIMETextHTMLUTF8)
-            c.String(http.StatusOK, swaggerHTML)
+            return c.Send(swaggerHTML)
         })
     }
 

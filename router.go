@@ -17,13 +17,15 @@ type IRouter interface {
     Handle(method, path string, handlers ...Handler) IRouter
     Static(path, root string) IRouter
     Security(schemes ...string) IRouter
+    Tags(names ...string) IRouter
 }
 
 type Router struct {
     i        gin.IRouter
     e        *Engine
-    base     string                  // 基础路径
-    security []OASecurityRequirement // 路由组安全配置
+    base     string
+    security []OARequirement // 路由组安全配置
+    tags     []string        // 路由组标签
 }
 
 func (r *Router) Use(args ...Handler) IRouter {
@@ -33,10 +35,15 @@ func (r *Router) Use(args ...Handler) IRouter {
 
 func (r *Router) Security(schemes ...string) IRouter {
     for _, scheme := range schemes {
-        r.security = append(r.security, OASecurityRequirement{
-            scheme: {},
+        r.security = append(r.security, OARequirement{
+            scheme: []string{}, // 修正：空字符串切片
         })
     }
+    return r
+}
+
+func (r *Router) Tags(names ...string) IRouter {
+    r.tags = append(r.tags, names...)
     return r
 }
 
@@ -58,14 +65,14 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
     grp := r.i.Group(path, handler(r.e, handlers...)...)
-    return &Router{i: grp, e: r.e, base: r.fullPath(path), security: r.security}
+    return &Router{i: grp, e: r.e, base: r.fullPath(path), security: r.security, tags: r.tags}
 }
 
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
     if r.e.cfg.OpenAPI {
         fullPath := r.fullPath(path)
         for _, h := range handlers {
-            AnalyzeAndRegister(fullPath, method, h, r.security)
+            AnalyzeAndRegister(fullPath, method, h, r.security, r.tags)
         }
     }
     r.i.Handle(method, path, handler(r.e, handlers...)...)

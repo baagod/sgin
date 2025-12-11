@@ -53,7 +53,10 @@ func main() {
     })
 
     // 私有路由组，需要鉴权
-    secure := r.Group("/api/v1", AuthMiddleware).Security("bearerAuth")
+    secure := r.Group("/api/v1", AuthMiddleware).
+        Security("bearerAuth").
+        Tags("auth")
+
     secure.GET("/secure", func(c *sgin.Ctx) (gin.H, error) {
         userID := c.Get("userID").(string) // 从 Context 中获取中间件设置的用户ID
         token := c.Header("Authorization")
@@ -64,6 +67,10 @@ func main() {
         }, nil
     })
 
+    secure.GET("/test", func(c *sgin.Ctx) (gin.H, error) {
+        return gin.H{}, nil
+    })
+
     // 简单的健康检查路由
     r.GET("/health", func(c *sgin.Ctx) string {
         return "Service is healthy!"
@@ -71,7 +78,7 @@ func main() {
 
     fmt.Println("Sgin 服务器正在端口 :8080 运行...")
     fmt.Println("请访问 http://localhost:8080/docs 查看 API 文档。")
-    fmt.Println("或访问 http://localhost:8080/openapi.json 查看原始 OpenAPI Spec。")
+    fmt.Println("或访问 http://localhost:8080/openapi.yaml 查看原始 OpenAPI Spec。")
 
     // 启动服务器
     err := r.Run(":8080")
