@@ -38,8 +38,7 @@ func DefaultErrorHandler(c *Ctx, err error) error {
         code = stc
     }
 
-    c.Header(HeaderContentType, MIMETextPlainUTF8)
-    return c.Status(code).Send(err.Error())
+    return c.Content(MIMETextPlainUTF8).Status(code).Send(err.Error())
 }
 
 func defaultConfig(config ...Config) (cfg Config) {
@@ -57,7 +56,15 @@ func New(config ...Config) *Engine {
     gin.SetMode(cfg.Mode)
 
     e := &Engine{engine: gin.New(), cfg: cfg}
-    e.Router = Router{i: e.engine, e: e, base: "/"}
+    e.Router = Router{
+        i:    e.engine,
+        e:    e,
+        base: "/",
+        op: OAOperation{
+            Responses: map[string]OAResponse{},
+            Security:  []OARequirement{{}},
+        },
+    }
 
     // gin.engine 配置
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -71,15 +78,13 @@ func New(config ...Config) *Engine {
     if cfg.OpenAPI && cfg.Mode != gin.ReleaseMode {
         e.GET("/openapi.yaml", func(c *Ctx) error {
             if specYAML, err := globalSpec.YAML(); err == nil {
-                c.Header(HeaderContentType, MIMETextYAMLUTF8)
-                return c.Send(string(specYAML))
+                return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
             }
             return c.Send(ErrInternalServerError())
         })
 
         e.GET("/docs", func(c *Ctx) error {
-            c.Header(HeaderContentType, MIMETextHTMLUTF8)
-            return c.Send(swaggerHTML)
+            return c.Content(MIMETextHTMLUTF8).Send(swaggerHTML)
         })
     }
 

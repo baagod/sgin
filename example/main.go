@@ -30,9 +30,10 @@ type GetUserReq struct {
 
 // UserResp 定义响应结构体
 type UserResp struct {
-    ID   int       `json:"id"`
-    Info string    `json:"info"`
-    Time time.Time `json:"time"`
+    ID      int       `json:"id"`
+    Info    string    `json:"info"`
+    Time    time.Time `json:"time"`
+    IsValid *bool     `json:"is_valid"`
 }
 
 func main() {
@@ -43,38 +44,42 @@ func main() {
     })
 
     // 注册一个 V2 智能 Handler
-    r.GET("users/:id", func(c *sgin.Ctx, q GetUserReq) (UserResp, error) { // 修改为不接收 req struct
-        user := UserResp{
-            ID:   q.ID,
-            Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", q.Type, q.Token, q.Name),
-            Time: time.Now(),
-        }
-        return user, nil
-    })
+    // r.GET("users/:id", func(c *sgin.Ctx, q GetUserReq) (UserResp, error) { // 修改为不接收 req struct
+    //     user := UserResp{
+    //         ID:   q.ID,
+    //         Info: fmt.Sprintf("类型: %s, 令牌: %s, 姓名: %s", q.Type, q.Token, q.Name),
+    //         Time: time.Now(),
+    //     }
+    //     return user, nil
+    // })
+    //
+    // // 私有路由组，需要鉴权
+    // secure := r.Group("/api/v1", AuthMiddleware, func(op *sgin.OAOperation) {
+    //     op.Security = []sgin.OARequirement{{"bearerAuth": {}}}
+    //     op.Tags = []string{"auth"}
+    // })
+    //
+    // secure.GET("/secure", func(op *sgin.OAOperation) {
+    //     // op.Summary = "#"
+    //     // op.Description = ""
+    // }, func(c *sgin.Ctx) (gin.H, error) {
+    //     userID := c.Get("userID").(string) // 从 Context 中获取中间件设置的用户ID
+    //     token := c.Header("Authorization")
+    //     return gin.H{
+    //         "message": "Welcome to the secure area!",
+    //         "userID":  userID,
+    //         "token":   token,
+    //     }, nil
+    // })
 
-    // 私有路由组，需要鉴权
-    secure := r.Group("/api/v1", AuthMiddleware).
-        Security("bearerAuth").
-        Tags("auth")
-
-    secure.GET("/secure", func(c *sgin.Ctx) (gin.H, error) {
-        userID := c.Get("userID").(string) // 从 Context 中获取中间件设置的用户ID
-        token := c.Header("Authorization")
-        return gin.H{
-            "message": "Welcome to the secure area!",
-            "userID":  userID,
-            "token":   token,
-        }, nil
-    })
-
-    secure.GET("/test", func(c *sgin.Ctx) (gin.H, error) {
-        return gin.H{}, nil
+    r.GET("/test", func(c *sgin.Ctx, i UserResp) *UserResp {
+        return &UserResp{}
     })
 
     // 简单的健康检查路由
-    r.GET("/health", func(c *sgin.Ctx) string {
-        return "Service is healthy!"
-    })
+    // r.GET("/health", func(c *sgin.Ctx) string {
+    //     return "Service is healthy!"
+    // })
 
     fmt.Println("Sgin 服务器正在端口 :8080 运行...")
     fmt.Println("请访问 http://localhost:8080/docs 查看 API 文档。")

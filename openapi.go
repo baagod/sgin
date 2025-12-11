@@ -8,11 +8,16 @@ import (
     "gopkg.in/yaml.v3"
 )
 
-const OpenAPIVersion = "3.1"
+const OpenAPIVersion = "3.1.1"
+
+type (
+    // AddOperation 用于配置 OAOperation
+    AddOperation func(*OAOperation)
+    // OARequirement e.g., {"bearerAuth": []}
+    OARequirement map[string][]string
+)
 
 // --- OpenAPI 基础结构 ---
-
-type OARequirement map[string][]string // e.g., {"bearerAuth": []}
 
 type OpenAPISpec struct {
     OpenAPI    string                `yaml:"openapi"`
@@ -60,6 +65,18 @@ type OAOperation struct {
     Tags        []string              `yaml:"tags,omitempty"`
 }
 
+// Clone returns a deep copy of the OAOperation.
+func (o *OAOperation) Clone() *OAOperation {
+    if o == nil {
+        return nil
+    }
+    var clone OAOperation
+    if data, err := yaml.Marshal(o); err == nil {
+        _ = yaml.Unmarshal(data, &clone)
+    }
+    return &clone
+}
+
 type OAParameter struct {
     Name        string    `yaml:"name"`
     In          string    `yaml:"in"` // "query", "header", "path", "cookie"
@@ -97,14 +114,16 @@ type OASecurityScheme struct {
 }
 
 type OASchema struct {
-    Type        string               `yaml:"type,omitempty"`
-    Format      string               `yaml:"format,omitempty"`
-    Properties  map[string]*OASchema `yaml:"properties,omitempty"`
-    Items       *OASchema            `yaml:"items,omitempty"` // For arrays
-    Required    []string             `yaml:"required,omitempty"`
-    Description string               `yaml:"description,omitempty"`
-    Example     any                  `yaml:"example,omitempty"`
-    Ref         string               `yaml:"$ref,omitempty"`
+    Type                 string               `yaml:"type,omitempty"`
+    Format               string               `yaml:"format,omitempty"`
+    Properties           map[string]*OASchema `yaml:"properties,omitempty"`
+    AdditionalProperties any                  `yaml:"additionalProperties,omitempty"` // Schema or bool
+    Items                *OASchema            `yaml:"items,omitempty"`                // For arrays
+    Required             []string             `yaml:"required,omitempty"`
+    Description          string               `yaml:"description,omitempty"`
+    Example              any                  `yaml:"example,omitempty"`
+    Ref                  string               `yaml:"$ref,omitempty"`
+    Nullable             bool                 `yaml:"nullable,omitempty"`
 }
 
 // 全局 OpenAPI 实例
@@ -130,23 +149,19 @@ var globalSpec = &OpenAPISpec{
     },
 }
 
-func AnalyzeAndRegister(path string, method string, handler Handler, security []OARequirement, tags []string) {
-    t := reflect.TypeOf(handler)
+// AnalyzeAndRegister 分析 Handler 并注册到 OpenAPI
+// 它现在接收一个已经组装好的 *OAOperation 对象，以及真实的 handler 函数。
+func AnalyzeAndRegister(path string, method string, mainHandler Handler, op *OAOperation) {
+    t := reflect.TypeOf(mainHandler)
     if t.Kind() != reflect.Func {
         return
-    }
-
-    op := OAOperation{
-        Responses: make(map[string]OAResponse),
-        Security:  security,
-        Tags:      tags, // 赋值
     }
 
     // 1. 分析入参 (Request)
     // 假设第二个参数是请求结构体 func(c *Ctx, req *UserReq)
     if t.NumIn() == 2 {
         reqType := t.In(1)
-        parseRequestParams(&op, reqType)
+        parseRequestParams(op, reqType)
     }
 
     // 2. 分析出参 (Response)
@@ -160,13 +175,14 @@ func AnalyzeAndRegister(path string, method string, handler Handler, security []
             break
         }
     }
-    parseResponseBody(&op, resType)
+
+    parseResponseBody(op, resType)
 
     // 3. 注册到全局 Spec
-    registerOperation(path, method, op, tags)
+    registerOperation(path, method, op)
 }
 
-func registerOperation(path string, method string, op OAOperation, tags []string) {
+func registerOperation(path string, method string, op *OAOperation) {
     if globalSpec.Paths == nil {
         globalSpec.Paths = make(map[string]OAPathItem)
     }
@@ -175,10 +191,10 @@ func registerOperation(path string, method string, op OAOperation, tags []string
     if _, ok := globalSpec.Paths[openAPIPath]; !ok {
         globalSpec.Paths[openAPIPath] = make(OAPathItem)
     }
-    globalSpec.Paths[openAPIPath][strings.ToLower(method)] = op
+    globalSpec.Paths[openAPIPath][strings.ToLower(method)] = *op // 注册 OAOperation 结构体
 
     // 将标签添加到全局列表 (去重)
-    for _, tagName := range tags {
+    for _, tagName := range op.Tags { // 从 op 中获取 tags
         found := false
         for _, existingTag := range globalSpec.Tags {
             if existingTag.Name == tagName {
@@ -209,6 +225,7 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
     if t.Kind() == reflect.Ptr {
         t = t.Elem()
     }
+
     if t.Kind() != reflect.Struct {
         return
     }
@@ -221,10 +238,12 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
         if tag := field.Tag.Get("uri"); tag != "" {
             addParam(op, tag, "path", true, desc, field.Type)
         }
+
         if tag := field.Tag.Get("form"); tag != "" {
             required := strings.Contains(field.Tag.Get("binding"), "required")
             addParam(op, tag, "query", required, desc, field.Type)
         }
+
         if tag := field.Tag.Get("header"); tag != "" {
             required := strings.Contains(field.Tag.Get("binding"), "required")
             addParam(op, tag, "header", required, desc, field.Type)
@@ -264,43 +283,50 @@ func parseResponseBody(op *OAOperation, t reflect.Type) {
 // getSchema 递归生成 Schema，支持基础类型、切片、Map 和结构体引用
 func getSchema(t reflect.Type) *OASchema {
     if t == nil {
-        return &OASchema{Type: "string"} // Fallback
+        return nil
     }
-    if t.Kind() == reflect.Ptr {
+
+    isPointer := t.Kind() == reflect.Ptr
+    if isPointer {
         t = t.Elem()
     }
 
+    s := &OASchema{Nullable: isPointer}
+
     switch t.Kind() {
     case reflect.Bool:
-        return &OASchema{Type: "boolean"}
+        s.Type = "boolean"
     case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
         reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-        return &OASchema{Type: "integer"}
-    case reflect.Float32, reflect.Float64:
-        return &OASchema{Type: "number"}
+        s.Type = "integer"
+    case reflect.Float32:
+        s.Type = "number"
+        s.Format = "float"
+    case reflect.Float64:
+        s.Type = "number"
+        s.Format = "double"
     case reflect.String:
-        return &OASchema{Type: "string"}
+        s.Type = "string"
     case reflect.Slice, reflect.Array:
-        return &OASchema{
-            Type:  "array",
-            Items: getSchema(t.Elem()),
-        }
+        s.Type = "array"
+        s.Items = getSchema(t.Elem())
     case reflect.Map:
-        return &OASchema{
-            Type: "object",
-            Properties: map[string]*OASchema{
-                "additionalProperties": getSchema(t.Elem()),
-            },
-        }
+        s.Type = "object"
+        s.AdditionalProperties = getSchema(t.Elem())
     case reflect.Struct:
         // 如果是时间类型，特殊处理
         if t.Name() == "Time" && t.PkgPath() == "time" {
-            return &OASchema{Type: "string", Format: "date-time"}
+            s.Type, s.Format = "string", "date-time"
+            return s
         }
         return registerStructSchema(t)
+    case reflect.Interface:
+        // Interfaces mean any object.
     default:
-        return &OASchema{Type: "string"} // Interface or other
+        return nil // Ignore unsupported types
     }
+
+    return s
 }
 
 // registerStructSchema 将结构体注册到 Components 并返回 $ref
@@ -351,6 +377,9 @@ func generateInlineStructSchema(t reflect.Type) *OASchema {
         }
 
         propSchema := getSchema(field.Type)
+        if propSchema == nil {
+            continue
+        }
         propSchema.Description = field.Tag.Get("doc")
 
         // 处理 required

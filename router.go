@@ -2,6 +2,7 @@ package sgin
 
 import (
     "net/http"
+    "reflect"
     "strings"
 
     "github.com/gin-gonic/gin"
@@ -16,34 +17,17 @@ type IRouter interface {
     Group(string, ...Handler) IRouter
     Handle(method, path string, handlers ...Handler) IRouter
     Static(path, root string) IRouter
-    Security(schemes ...string) IRouter
-    Tags(names ...string) IRouter
 }
 
 type Router struct {
-    i        gin.IRouter
-    e        *Engine
-    base     string
-    security []OARequirement // 路由组安全配置
-    tags     []string        // 路由组标签
+    i    gin.IRouter
+    e    *Engine
+    base string
+    op   OAOperation
 }
 
 func (r *Router) Use(args ...Handler) IRouter {
     r.i.Use(handler(r.e, args...)...)
-    return r
-}
-
-func (r *Router) Security(schemes ...string) IRouter {
-    for _, scheme := range schemes {
-        r.security = append(r.security, OARequirement{
-            scheme: []string{}, // 修正：空字符串切片
-        })
-    }
-    return r
-}
-
-func (r *Router) Tags(names ...string) IRouter {
-    r.tags = append(r.tags, names...)
     return r
 }
 
@@ -64,18 +48,38 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 }
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
-    grp := r.i.Group(path, handler(r.e, handlers...)...)
-    return &Router{i: grp, e: r.e, base: r.fullPath(path), security: r.security, tags: r.tags}
+    realHandlers, opOption := separateHandlers(handlers)
+    grp := r.i.Group(path, handler(r.e, realHandlers...)...)
+
+    op := OAOperation{Responses: map[string]OAResponse{}}
+    if opOption != nil {
+        opOption(&op)
+    }
+
+    return &Router{i: grp, e: r.e, base: r.fullPath(path), op: op}
 }
 
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
+    realHandlers, operation := separateHandlers(handlers)
+
     if r.e.cfg.OpenAPI {
-        fullPath := r.fullPath(path)
-        for _, h := range handlers {
-            AnalyzeAndRegister(fullPath, method, h, r.security, r.tags)
+        // 基于当前 Router 的 op 原型克隆一个新的 OAOperation，用于当前路由
+        opForThisRoute := r.op.Clone()
+
+        // 应用路由级别传入的 AddOperation 到这个克隆的 op 上
+        if operation != nil {
+            operation(r.op.Clone())
+        }
+
+        // 将克隆并应用了选项的 op 传递给 AnalyzeAndRegister
+        // AnalyzeAndRegister 只需要知道最终的 OAOperation
+        if len(realHandlers) > 0 {
+            fullPath := r.fullPath(path)
+            AnalyzeAndRegister(fullPath, method, realHandlers[len(realHandlers)-1], opForThisRoute)
         }
     }
-    r.i.Handle(method, path, handler(r.e, handlers...)...)
+
+    r.i.Handle(method, path, handler(r.e, realHandlers...)...)
     return r
 }
 
@@ -86,4 +90,20 @@ func (r *Router) Static(path, root string) IRouter {
 
 func (r *Router) fullPath(path string) string {
     return strings.ReplaceAll(r.base+path, "//", "/")
+}
+
+func separateHandlers(handlers []Handler) ([]Handler, AddOperation) {
+    if len(handlers) == 0 {
+        return handlers, nil
+    }
+
+    h := handlers[0]
+    opType := reflect.TypeOf((AddOperation)(nil))
+
+    if h != nil && reflect.TypeOf(h).ConvertibleTo(opType) {
+        opFunc := reflect.ValueOf(h).Convert(opType).Interface().(AddOperation)
+        return handlers[1:], opFunc
+    }
+
+    return handlers, nil
 }

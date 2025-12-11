@@ -163,8 +163,6 @@ func (c *Ctx) Next() error {
     return nil
 }
 
-// ------ SET 设置 ------
-
 func (c *Ctx) Status(code int) *Ctx {
     c.Writer.WriteHeader(code)
     return c
@@ -180,8 +178,6 @@ func (c *Ctx) Get(key string, value ...any) any {
     return v
 }
 
-// ------ GET 获取 ------
-
 func (c *Ctx) Method() string {
     return c.Request.Method
 }
@@ -195,8 +191,14 @@ func (c *Ctx) Header(key string, value ...string) string {
     return header
 }
 
-func (c *Ctx) SetHeader(key string, value string) {
+func (c *Ctx) SetHeader(key string, value string) *Ctx {
     c.ctx.Header(key, value)
+    return c
+}
+
+func (c *Ctx) Content(value string) *Ctx {
+    c.ctx.Header(HeaderContentType, value)
+    return c
 }
 
 func (c *Ctx) RawBody() (body []byte) {
