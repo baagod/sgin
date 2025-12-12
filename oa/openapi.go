@@ -36,18 +36,6 @@ type Tag struct {
     Description string `yaml:"description,omitempty"`
 }
 
-type Server struct {
-    URL         string                    `yaml:"url"`
-    Description string                    `yaml:"description,omitempty"`
-    Variables   map[string]ServerVariable `yaml:"variables,omitempty"`
-}
-
-type ServerVariable struct {
-    Enum        []string `yaml:"enum,omitempty"`
-    Default     string   `yaml:"default"`
-    Description string   `yaml:"description,omitempty"`
-}
-
 type Operation struct {
     Summary     string              `yaml:"summary,omitempty"`
     Description string              `yaml:"description,omitempty"`
@@ -86,31 +74,6 @@ type Components struct {
     SecuritySchemes map[string]SecurityScheme `yaml:"securitySchemes,omitempty"`
 }
 
-type SecurityScheme struct {
-    Type         string `yaml:"type"` // "http", "apiKey", "oauth2"
-    Description  string `yaml:"description,omitempty"`
-    Name         string `yaml:"name,omitempty"`         // Header name for apiKey
-    In           string `yaml:"in,omitempty"`           // "header" for apiKey
-    Scheme       string `yaml:"scheme,omitempty"`       // "bearer" (for HTTP)
-    BearerFormat string `yaml:"bearerFormat,omitempty"` // "JWT" (for bearer)
-    // flows
-    OpenIdConnectUrl  string `yaml:"openIdConnectUrl,omitempty"`
-    Oauth2MetadataUrl string `yaml:"oauth2MetadataUrl,omitempty"`
-}
-
-type Schema struct {
-    Type                 string             `yaml:"type,omitempty"`
-    Format               string             `yaml:"format,omitempty"`
-    Properties           map[string]*Schema `yaml:"properties,omitempty"`
-    AdditionalProperties any                `yaml:"additionalProperties,omitempty"` // Schema or bool
-    Items                *Schema            `yaml:"items,omitempty"`                // For arrays
-    Required             []string           `yaml:"required,omitempty"`
-    Description          string             `yaml:"description,omitempty"`
-    Example              any                `yaml:"example,omitempty"`
-    Ref                  string             `yaml:"$ref,omitempty"`
-    Nullable             bool               `yaml:"nullable,omitempty"`
-}
-
 // YAML 返回 YAML 格式的 OpenAPI 规范
 func (o *OpenAPI) YAML() ([]byte, error) {
     var buf bytes.Buffer
@@ -125,6 +88,18 @@ func (o *OpenAPI) YAML() ([]byte, error) {
     return buf.Bytes(), nil
 }
 
+// Clone 返回一份深度的 OpenAPI 副本
+func (o *OpenAPI) Clone() *OpenAPI {
+    if o == nil {
+        return nil
+    }
+    var clone OpenAPI
+    if data, err := yaml.Marshal(o); err == nil {
+        _ = yaml.Unmarshal(data, &clone)
+    }
+    return &clone
+}
+
 // Clone 返回一份深度的 Operation 副本
 func (o *Operation) Clone() *Operation {
     if o == nil {
@@ -137,7 +112,7 @@ func (o *Operation) Clone() *Operation {
     return &clone
 }
 
-var ApiSpec = &OpenAPI{
+var Default = OpenAPI{
     OpenAPI: Version,
     Info: Info{
         Title:   "Sgin API",
@@ -166,7 +141,6 @@ var ApiSpec = &OpenAPI{
             },
         },
     },
-    // Security: []Requirement{{"bearerAuth": {}}},
 }
 
 // Register 分析 Handler 并注册到 OpenAPI
@@ -198,32 +172,32 @@ func Register(path, method string, handler any, op *Operation) {
 
     parseResponseBody(op, resType)
 
-    // 3. 注册到全局 ApiSpec
+    // 3. 注册到全局 Default
     registerOperation(path, method, op)
 }
 
 func registerOperation(path string, method string, op *Operation) {
-    if ApiSpec.Paths == nil {
-        ApiSpec.Paths = make(map[string]PathItem)
+    if Default.Paths == nil {
+        Default.Paths = make(map[string]PathItem)
     }
 
     openAPIPath := convertPath(path)
-    if _, ok := ApiSpec.Paths[openAPIPath]; !ok {
-        ApiSpec.Paths[openAPIPath] = make(PathItem)
+    if _, ok := Default.Paths[openAPIPath]; !ok {
+        Default.Paths[openAPIPath] = make(PathItem)
     }
-    ApiSpec.Paths[openAPIPath][strings.ToLower(method)] = *op // 注册 Operation 结构体
+    Default.Paths[openAPIPath][strings.ToLower(method)] = *op // 注册 Operation 结构体
 
     // 将标签添加到全局列表 (去重)
     for _, tagName := range op.Tags { // 从 op 中获取 tags
         found := false
-        for _, existingTag := range ApiSpec.Tags {
+        for _, existingTag := range Default.Tags {
             if existingTag.Name == tagName {
                 found = true
                 break
             }
         }
         if !found {
-            ApiSpec.Tags = append(ApiSpec.Tags, Tag{Name: tagName})
+            Default.Tags = append(Default.Tags, Tag{Name: tagName})
         }
     }
 }
@@ -286,7 +260,7 @@ func parseRequestParams(op *Operation, t reflect.Type) {
         }
 
         // 确保字段 Schema 不为空
-        if propSchema := getSchema(field.Type); propSchema != nil {
+        if propSchema := schemaFromType(field.Type); propSchema != nil {
             propSchema.Description = desc
             bodySchema.Properties[propName] = propSchema
 
@@ -312,7 +286,7 @@ func addParam(op *Operation, name, in string, required bool, desc string, t refl
         In:          in,
         Required:    required,
         Description: desc,
-        Schema:      getSchema(t),
+        Schema:      schemaFromType(t),
     })
 }
 
@@ -327,59 +301,10 @@ func parseResponseBody(op *Operation, t reflect.Type) {
         Description: "OK",
         Content: map[string]MediaType{
             "application/json": {
-                Schema: getSchema(t),
+                Schema: schemaFromType(t),
             },
         },
     }
-}
-
-// getSchema 递归生成 Schema，支持基础类型、切片、Map 和结构体引用
-func getSchema(t reflect.Type) *Schema {
-    if t == nil {
-        return nil
-    }
-
-    isPointer := t.Kind() == reflect.Ptr
-    if isPointer {
-        t = t.Elem()
-    }
-
-    s := &Schema{Nullable: isPointer}
-
-    switch t.Kind() {
-    case reflect.Bool:
-        s.Type = "boolean"
-    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-        reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-        s.Type = "integer"
-    case reflect.Float32:
-        s.Type = "number"
-        s.Format = "float"
-    case reflect.Float64:
-        s.Type = "number"
-        s.Format = "double"
-    case reflect.String:
-        s.Type = "string"
-    case reflect.Slice, reflect.Array:
-        s.Type = "array"
-        s.Items = getSchema(t.Elem())
-    case reflect.Map:
-        s.Type = "object"
-        s.AdditionalProperties = getSchema(t.Elem())
-    case reflect.Struct:
-        // 如果是时间类型，特殊处理
-        if t.Name() == "Time" && t.PkgPath() == "time" {
-            s.Type, s.Format = "string", "date-time"
-            return s
-        }
-        return registerStructSchema(t)
-    case reflect.Interface:
-        // Interfaces mean any object.
-    default:
-        return nil // Ignore unsupported types
-    }
-
-    return s
 }
 
 // registerStructSchema 将结构体注册到 Components 并返回 $ref
@@ -393,19 +318,19 @@ func registerStructSchema(t reflect.Type) *Schema {
     }
 
     // 检查是否已注册
-    if ApiSpec.Components.Schemas == nil {
-        ApiSpec.Components.Schemas = map[string]*Schema{}
+    if Default.Components.Schemas == nil {
+        Default.Components.Schemas = map[string]*Schema{}
     }
-    if _, ok := ApiSpec.Components.Schemas[name]; ok {
+    if _, ok := Default.Components.Schemas[name]; ok {
         return &Schema{Ref: "#/components/schemas/" + name}
     }
 
     // 先占位，防止递归死循环
-    ApiSpec.Components.Schemas[name] = &Schema{}
+    Default.Components.Schemas[name] = &Schema{}
 
     // 生成 Schema
     schema := generateInlineStructSchema(t)
-    ApiSpec.Components.Schemas[name] = schema
+    Default.Components.Schemas[name] = schema
 
     return &Schema{Ref: "#/components/schemas/" + name}
 }
@@ -429,7 +354,7 @@ func generateInlineStructSchema(t reflect.Type) *Schema {
             propName = parts[0]
         }
 
-        propSchema := getSchema(field.Type)
+        propSchema := schemaFromType(field.Type)
         if propSchema == nil {
             continue
         }

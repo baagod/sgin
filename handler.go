@@ -89,15 +89,15 @@ func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
 }
 
 // bindV2 实现了 V2 架构的智能复合绑定
-func bindV2(c *gin.Context, typ reflect.Type) (_ reflect.Value, err error) {
+func bindV2(c *gin.Context, t reflect.Type) (_ reflect.Value, err error) {
     // 确保我们操作的是具体类型（非指针）来创建实例，但绑定时可能需要指针
-    isPtr := typ.Kind() == reflect.Ptr
+    isPtr := t.Kind() == reflect.Ptr
     if isPtr {
-        typ = typ.Elem()
+        t = t.Elem()
     }
 
     // 创建一个新的结构体实例
-    valPtr := reflect.New(typ) // valPtr 是指向该结构体的指针 (例如 *UserReq)
+    valPtr := reflect.New(t) // valPtr 是指向该结构体的指针 (例如 *UserReq)
     ptr := valPtr.Interface()
 
     // 绑定 URI, Header, Query 和 Body 参数，忽略效验错误。
@@ -120,7 +120,7 @@ func bindV2(c *gin.Context, typ reflect.Type) (_ reflect.Value, err error) {
             // 使用 StructNamespace (如 "UserReq.Info.Age") 获取字段的层级路径
             parts := strings.Split(errs[0].StructNamespace(), ".")
 
-            currentTyp := typ
+            currentTyp := t
             var field reflect.StructField
             found := true
 
@@ -151,11 +151,11 @@ func bindV2(c *gin.Context, typ reflect.Type) (_ reflect.Value, err error) {
         return
     }
 
-    if isPtr { // 用户要 *typ
-        return valPtr, nil // 返回 *typ
+    if isPtr { // 用户要 *t
+        return valPtr, nil // 返回 *t
     }
 
-    return valPtr.Elem(), nil // 否则返回 typ
+    return valPtr.Elem(), nil // 否则返回 t
 }
 
 // tryBind 执行绑定操作。

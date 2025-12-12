@@ -11,8 +11,9 @@ import (
 
 type Engine struct {
     Router
-    cfg    Config
-    engine *gin.Engine
+    cfg     Config
+    engine  *gin.Engine
+    openapi *oa.OpenAPI
 }
 
 type Config struct {
@@ -22,7 +23,7 @@ type Config struct {
     ErrorHandler   func(*Ctx, error) error
     // 日志记录器回调，参数为 [文本] 和 [JSON] 消息，返回 true 输出默认日志。
     Logger  func(*Ctx, string, string) bool
-    OpenAPI bool // 是否开启 OpenAPI 文档生成
+    OpenAPI func(*oa.OpenAPI) bool // OpenAPI 全局配置
 }
 
 // DefaultErrorHandler 默认的错误处理器
@@ -54,7 +55,7 @@ func New(config ...Config) *Engine {
     cfg := defaultConfig(config...)
     gin.SetMode(cfg.Mode)
 
-    e := &Engine{engine: gin.New(), cfg: cfg}
+    e := &Engine{engine: gin.New(), cfg: cfg, openapi: oa.Default.Clone()}
     e.Router = Router{
         i:    e.engine,
         e:    e,
@@ -74,9 +75,9 @@ func New(config ...Config) *Engine {
     e.Use(Logger, Recovery)
 
     // OpenAPI 文档中间件
-    if cfg.OpenAPI && cfg.Mode != gin.ReleaseMode {
+    if cfg.OpenAPI != nil && cfg.OpenAPI(e.openapi) && cfg.Mode != gin.ReleaseMode {
         e.GET("/openapi.yaml", func(c *Ctx) error {
-            if specYAML, err := oa.ApiSpec.YAML(); err == nil {
+            if specYAML, err := e.openapi.YAML(); err == nil {
                 return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
             }
             return c.Send(ErrInternalServerError())

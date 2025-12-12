@@ -6,6 +6,7 @@ import (
     "time"
 
     "github.com/baagod/sgin"
+    "github.com/baagod/sgin/oa"
     "github.com/gin-gonic/gin"
 )
 
@@ -15,7 +16,7 @@ func AuthMiddleware(c *sgin.Ctx) error {
     if !strings.HasPrefix(token, "Bearer ") {
         return c.Send(sgin.ErrUnauthorized("Missing or invalid token"))
     }
-    // 假设验证通过，将用户ID存入 Context
+    // 假设验证通过，将用户 ID 存入 Context
     c.Get("userID", "user123")
     return c.Next()
 }
@@ -39,8 +40,11 @@ type UserResp struct {
 func main() {
     // 初始化 sgin 引擎，并开启 OpenAPI 文档服务
     r := sgin.New(sgin.Config{
-        Mode:    gin.DebugMode, // 调试模式
-        OpenAPI: true,          // 开启 OpenAPI 文档
+        Mode: gin.DebugMode, // 调试模式
+        OpenAPI: func(a *oa.OpenAPI) bool {
+            a.Security = append(a.Security, oa.Requirement{"bearer": {}})
+            return true
+        },
     })
 
     // 注册一个 V2 智能 Handler

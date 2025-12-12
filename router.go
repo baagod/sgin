@@ -67,7 +67,7 @@ func (r *Router) Group(path string, handlers ...Handler) IRouter {
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
     realHandlers, operation := separateHandlers(handlers) // 在这里声明并赋值
 
-    if r.e.cfg.OpenAPI {
+    if r.e.cfg.OpenAPI != nil {
         fullPath := r.fullPath(path)
         cloneOp := r.op.Clone()
 
