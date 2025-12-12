@@ -5,6 +5,7 @@ import (
     "reflect"
     "strings"
 
+    "github.com/baagod/sgin/oa"
     "github.com/gin-gonic/gin"
 )
 
@@ -23,7 +24,7 @@ type Router struct {
     i    gin.IRouter
     e    *Engine
     base string
-    op   OAOperation
+    op   oa.Operation
 }
 
 func (r *Router) Use(args ...Handler) IRouter {
@@ -51,9 +52,9 @@ func (r *Router) Group(path string, handlers ...Handler) IRouter {
     realHandlers, operation := separateHandlers(handlers)
     grp := r.i.Group(path, handler(r.e, realHandlers...)...)
 
-    op := OAOperation{
-        Responses: map[string]OAResponse{},
-        Security:  []OARequirement{{}},
+    op := oa.Operation{
+        Responses: map[string]oa.Response{},
+        Security:  []oa.Requirement{{}},
     }
 
     if operation != nil {
@@ -75,7 +76,7 @@ func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
         }
 
         if len(realHandlers) > 0 {
-            AnalyzeAndRegister(fullPath, method, realHandlers[len(realHandlers)-1], cloneOp)
+            oa.Register(fullPath, method, realHandlers[len(realHandlers)-1], cloneOp)
         }
     }
 
@@ -92,16 +93,16 @@ func (r *Router) fullPath(path string) string {
     return strings.ReplaceAll(r.base+path, "//", "/")
 }
 
-func separateHandlers(handlers []Handler) ([]Handler, AddOperation) {
+func separateHandlers(handlers []Handler) ([]Handler, oa.AddOperation) {
     if len(handlers) == 0 {
         return handlers, nil
     }
 
     h := handlers[0]
-    opType := reflect.TypeOf((AddOperation)(nil))
+    opType := reflect.TypeOf((oa.AddOperation)(nil))
 
     if h != nil && reflect.TypeOf(h).ConvertibleTo(opType) {
-        opFunc := reflect.ValueOf(h).Convert(opType).Interface().(AddOperation)
+        opFunc := reflect.ValueOf(h).Convert(opType).Interface().(oa.AddOperation)
         return handlers[1:], opFunc
     }
 

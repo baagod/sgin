@@ -1,4 +1,4 @@
-package sgin
+package oa
 
 import (
     "bytes"
@@ -8,26 +8,107 @@ import (
     "gopkg.in/yaml.v3"
 )
 
-const OpenAPIVersion = "3.1.1"
+const Version = "3.1.1"
 
 type (
-    // AddOperation 用于配置 OAOperation
-    AddOperation func(*OAOperation)
-    // OARequirement e.g., {"bearerAuth": []}
-    OARequirement map[string][]string
-    // OAPathItem 对应一个路径下的操作集合 (Method -> Operation)
-    OAPathItem map[string]OAOperation
+    AddOperation func(*Operation)
+    Requirement  map[string][]string
+    PathItem     map[string]Operation
 )
 
-// --- OpenAPI 基础结构 ---
-
 type OpenAPI struct {
-    OpenAPI    string                `yaml:"openapi"`
-    Info       OAInfo                `yaml:"info"`
-    Paths      map[string]OAPathItem `yaml:"paths"`
-    Components OAComponents          `yaml:"components"`
-    Security   []OARequirement       `yaml:"security,omitempty"`
-    Tags       []OATag               `yaml:"tags,omitempty"`
+    OpenAPI    string              `yaml:"openapi"`
+    Info       Info                `yaml:"info"`
+    Servers    []Server            `yaml:"servers,omitempty"` // todo: ...
+    Paths      map[string]PathItem `yaml:"paths"`
+    Components Components          `yaml:"components"`
+    Security   []Requirement       `yaml:"security,omitempty"`
+    Tags       []Tag               `yaml:"tags,omitempty"`
+}
+
+type Info struct {
+    Title   string `yaml:"title"`
+    Version string `yaml:"version"`
+}
+
+type Tag struct {
+    Name        string `yaml:"name"`
+    Description string `yaml:"description,omitempty"`
+}
+
+type Server struct {
+    URL         string                    `yaml:"url"`
+    Description string                    `yaml:"description,omitempty"`
+    Variables   map[string]ServerVariable `yaml:"variables,omitempty"`
+}
+
+type ServerVariable struct {
+    Enum        []string `yaml:"enum,omitempty"`
+    Default     string   `yaml:"default"`
+    Description string   `yaml:"description,omitempty"`
+}
+
+type Operation struct {
+    Summary     string              `yaml:"summary,omitempty"`
+    Description string              `yaml:"description,omitempty"`
+    Parameters  []Param             `yaml:"parameters,omitempty"`
+    RequestBody *RequestBody        `yaml:"requestBody,omitempty"`
+    Responses   map[string]Response `yaml:"responses"`
+    Security    []Requirement       `yaml:"security,omitempty"`
+    Tags        []string            `yaml:"tags,omitempty"`
+}
+
+type Param struct {
+    Name        string  `yaml:"name"`
+    In          string  `yaml:"in"` // "query", "header", "path", "cookie"
+    Required    bool    `yaml:"required"`
+    Description string  `yaml:"description,omitempty"`
+    Schema      *Schema `yaml:"schema,omitempty"`
+}
+
+type RequestBody struct {
+    Description string               `yaml:"description,omitempty"`
+    Content     map[string]MediaType `yaml:"content"`
+    Required    bool                 `yaml:"required"`
+}
+
+type Response struct {
+    Description string               `yaml:"description"`
+    Content     map[string]MediaType `yaml:"content,omitempty"`
+}
+
+type MediaType struct {
+    Schema *Schema `yaml:"schema"`
+}
+
+type Components struct {
+    Schemas         map[string]*Schema        `yaml:"schemas,omitempty"`
+    SecuritySchemes map[string]SecurityScheme `yaml:"securitySchemes,omitempty"`
+}
+
+type SecurityScheme struct {
+    Type         string `yaml:"type"` // "http", "apiKey", "oauth2"
+    Description  string `yaml:"description,omitempty"`
+    Name         string `yaml:"name,omitempty"`         // Header name for apiKey
+    In           string `yaml:"in,omitempty"`           // "header" for apiKey
+    Scheme       string `yaml:"scheme,omitempty"`       // "bearer" (for HTTP)
+    BearerFormat string `yaml:"bearerFormat,omitempty"` // "JWT" (for bearer)
+    // flows
+    OpenIdConnectUrl  string `yaml:"openIdConnectUrl,omitempty"`
+    Oauth2MetadataUrl string `yaml:"oauth2MetadataUrl,omitempty"`
+}
+
+type Schema struct {
+    Type                 string             `yaml:"type,omitempty"`
+    Format               string             `yaml:"format,omitempty"`
+    Properties           map[string]*Schema `yaml:"properties,omitempty"`
+    AdditionalProperties any                `yaml:"additionalProperties,omitempty"` // Schema or bool
+    Items                *Schema            `yaml:"items,omitempty"`                // For arrays
+    Required             []string           `yaml:"required,omitempty"`
+    Description          string             `yaml:"description,omitempty"`
+    Example              any                `yaml:"example,omitempty"`
+    Ref                  string             `yaml:"$ref,omitempty"`
+    Nullable             bool               `yaml:"nullable,omitempty"`
 }
 
 // YAML 返回 YAML 格式的 OpenAPI 规范
@@ -44,114 +125,54 @@ func (o *OpenAPI) YAML() ([]byte, error) {
     return buf.Bytes(), nil
 }
 
-type OAInfo struct {
-    Title   string `yaml:"title"`
-    Version string `yaml:"version"`
-}
-
-type OATag struct {
-    Name        string `yaml:"name"`
-    Description string `yaml:"description,omitempty"`
-}
-
-type OAOperation struct {
-    Summary     string                `yaml:"summary,omitempty"`
-    Description string                `yaml:"description,omitempty"`
-    Parameters  []OAParam             `yaml:"parameters,omitempty"`
-    RequestBody *OARequestBody        `yaml:"requestBody,omitempty"`
-    Responses   map[string]OAResponse `yaml:"responses"`
-    Security    []OARequirement       `yaml:"security,omitempty"`
-    Tags        []string              `yaml:"tags,omitempty"`
-}
-
-// Clone 返回一份深度的 OAOperation 副本
-func (o *OAOperation) Clone() *OAOperation {
+// Clone 返回一份深度的 Operation 副本
+func (o *Operation) Clone() *Operation {
     if o == nil {
         return nil
     }
-    var clone OAOperation
+    var clone Operation
     if data, err := yaml.Marshal(o); err == nil {
         _ = yaml.Unmarshal(data, &clone)
     }
     return &clone
 }
 
-type OAParam struct {
-    Name        string    `yaml:"name"`
-    In          string    `yaml:"in"` // "query", "header", "path", "cookie"
-    Required    bool      `yaml:"required"`
-    Description string    `yaml:"description,omitempty"`
-    Schema      *OASchema `yaml:"schema,omitempty"`
-}
-
-type OARequestBody struct {
-    Description string                 `yaml:"description,omitempty"`
-    Content     map[string]OAMediaType `yaml:"content"`
-    Required    bool                   `yaml:"required"`
-}
-
-type OAResponse struct {
-    Description string                 `yaml:"description"`
-    Content     map[string]OAMediaType `yaml:"content,omitempty"`
-}
-
-type OAMediaType struct {
-    Schema *OASchema `yaml:"schema"`
-}
-
-type OAComponents struct {
-    Schemas         map[string]*OASchema        `yaml:"schemas,omitempty"`
-    SecuritySchemes map[string]OASecurityScheme `yaml:"securitySchemes,omitempty"`
-}
-
-type OASecurityScheme struct {
-    Type         string `yaml:"type"`                   // "http", "apiKey", "oauth2"
-    Scheme       string `yaml:"scheme,omitempty"`       // "bearer" (for HTTP)
-    BearerFormat string `yaml:"bearerFormat,omitempty"` // "JWT" (for bearer)
-    Name         string `yaml:"name,omitempty"`         // Header name for apiKey
-    In           string `yaml:"in,omitempty"`           // "header" for apiKey
-}
-
-type OASchema struct {
-    Type                 string               `yaml:"type,omitempty"`
-    Format               string               `yaml:"format,omitempty"`
-    Properties           map[string]*OASchema `yaml:"properties,omitempty"`
-    AdditionalProperties any                  `yaml:"additionalProperties,omitempty"` // Schema or bool
-    Items                *OASchema            `yaml:"items,omitempty"`                // For arrays
-    Required             []string             `yaml:"required,omitempty"`
-    Description          string               `yaml:"description,omitempty"`
-    Example              any                  `yaml:"example,omitempty"`
-    Ref                  string               `yaml:"$ref,omitempty"`
-    Nullable             bool                 `yaml:"nullable,omitempty"`
-}
-
-// 全局 OpenAPI 实例
-var globalSpec = &OpenAPI{
-    OpenAPI: OpenAPIVersion,
-    Info: OAInfo{
+var ApiSpec = &OpenAPI{
+    OpenAPI: Version,
+    Info: Info{
         Title:   "Sgin API",
         Version: "1.0.0",
     },
-    Paths: make(map[string]OAPathItem),
-    Components: OAComponents{
-        Schemas: make(map[string]*OASchema),
-        SecuritySchemes: map[string]OASecurityScheme{
-            "bearerAuth": {
+    Paths: map[string]PathItem{},
+    Components: Components{
+        Schemas: map[string]*Schema{},
+        SecuritySchemes: map[string]SecurityScheme{
+            "bearer": {
                 Type:         "http",
                 Scheme:       "bearer",
-                BearerFormat: "JWT Bearer token authentication",
+                BearerFormat: "JWT",
+            },
+            "basic": {
+                Type:   "http",
+                Scheme: "basic",
+            },
+            "apikey": {
+                Type: "apiKey",
+                Name: "api-key",
+                In:   "header",
+            },
+            "oauth2": {
+                Type: "oauth2",
             },
         },
     },
-    Security: []OARequirement{
-        {"bearerAuth": {}},
-    },
+    // Security: []Requirement{{"bearerAuth": {}}},
 }
 
-// AnalyzeAndRegister 分析 Handler 并注册到 OpenAPI
-// 它现在接收一个已经组装好的 *OAOperation 对象，以及真实的 handler 函数。
-func AnalyzeAndRegister(path string, method string, mainHandler Handler, op *OAOperation) {
-    t := reflect.TypeOf(mainHandler)
+// Register 分析 Handler 并注册到 OpenAPI
+// 它现在接收一个已经组装好的 *Operation 对象，以及真实的 handler 函数。
+func Register(path, method string, handler any, op *Operation) {
+    t := reflect.TypeOf(handler)
     if t.Kind() != reflect.Func {
         return
     }
@@ -177,32 +198,32 @@ func AnalyzeAndRegister(path string, method string, mainHandler Handler, op *OAO
 
     parseResponseBody(op, resType)
 
-    // 3. 注册到全局 Spec
+    // 3. 注册到全局 ApiSpec
     registerOperation(path, method, op)
 }
 
-func registerOperation(path string, method string, op *OAOperation) {
-    if globalSpec.Paths == nil {
-        globalSpec.Paths = make(map[string]OAPathItem)
+func registerOperation(path string, method string, op *Operation) {
+    if ApiSpec.Paths == nil {
+        ApiSpec.Paths = make(map[string]PathItem)
     }
 
     openAPIPath := convertPath(path)
-    if _, ok := globalSpec.Paths[openAPIPath]; !ok {
-        globalSpec.Paths[openAPIPath] = make(OAPathItem)
+    if _, ok := ApiSpec.Paths[openAPIPath]; !ok {
+        ApiSpec.Paths[openAPIPath] = make(PathItem)
     }
-    globalSpec.Paths[openAPIPath][strings.ToLower(method)] = *op // 注册 OAOperation 结构体
+    ApiSpec.Paths[openAPIPath][strings.ToLower(method)] = *op // 注册 Operation 结构体
 
     // 将标签添加到全局列表 (去重)
     for _, tagName := range op.Tags { // 从 op 中获取 tags
         found := false
-        for _, existingTag := range globalSpec.Tags {
+        for _, existingTag := range ApiSpec.Tags {
             if existingTag.Name == tagName {
                 found = true
                 break
             }
         }
         if !found {
-            globalSpec.Tags = append(globalSpec.Tags, OATag{Name: tagName})
+            ApiSpec.Tags = append(ApiSpec.Tags, Tag{Name: tagName})
         }
     }
 }
@@ -220,7 +241,7 @@ func convertPath(path string) string {
 }
 
 // parseRequestParams 解析请求参数 (Path, Query, Header)
-func parseRequestParams(op *OAOperation, t reflect.Type) {
+func parseRequestParams(op *Operation, t reflect.Type) {
     if t.Kind() == reflect.Ptr {
         t = t.Elem()
     }
@@ -229,7 +250,7 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
         return
     }
 
-    bodySchema := &OASchema{Type: "object", Properties: map[string]*OASchema{}}
+    bodySchema := &Schema{Type: "object", Properties: map[string]*Schema{}}
 
     for i := 0; i < t.NumField(); i++ {
         field := t.Field(i)
@@ -277,16 +298,16 @@ func parseRequestParams(op *OAOperation, t reflect.Type) {
 
     // 如果 bodySchema 中有任何属性，才将其添加到 RequestBody
     if len(bodySchema.Properties) > 0 {
-        op.RequestBody = &OARequestBody{
-            Content: map[string]OAMediaType{
+        op.RequestBody = &RequestBody{
+            Content: map[string]MediaType{
                 "application/json": {Schema: bodySchema},
             },
         }
     }
 }
 
-func addParam(op *OAOperation, name, in string, required bool, desc string, t reflect.Type) {
-    op.Parameters = append(op.Parameters, OAParam{
+func addParam(op *Operation, name, in string, required bool, desc string, t reflect.Type) {
+    op.Parameters = append(op.Parameters, Param{
         Name:        name,
         In:          in,
         Required:    required,
@@ -296,15 +317,15 @@ func addParam(op *OAOperation, name, in string, required bool, desc string, t re
 }
 
 // parseResponseBody 解析响应体
-func parseResponseBody(op *OAOperation, t reflect.Type) {
+func parseResponseBody(op *Operation, t reflect.Type) {
     if t == nil {
-        op.Responses["200"] = OAResponse{Description: "OK"}
+        op.Responses["200"] = Response{Description: "OK"}
         return
     }
 
-    op.Responses["200"] = OAResponse{
+    op.Responses["200"] = Response{
         Description: "OK",
-        Content: map[string]OAMediaType{
+        Content: map[string]MediaType{
             "application/json": {
                 Schema: getSchema(t),
             },
@@ -313,7 +334,7 @@ func parseResponseBody(op *OAOperation, t reflect.Type) {
 }
 
 // getSchema 递归生成 Schema，支持基础类型、切片、Map 和结构体引用
-func getSchema(t reflect.Type) *OASchema {
+func getSchema(t reflect.Type) *Schema {
     if t == nil {
         return nil
     }
@@ -323,7 +344,7 @@ func getSchema(t reflect.Type) *OASchema {
         t = t.Elem()
     }
 
-    s := &OASchema{Nullable: isPointer}
+    s := &Schema{Nullable: isPointer}
 
     switch t.Kind() {
     case reflect.Bool:
@@ -362,7 +383,7 @@ func getSchema(t reflect.Type) *OASchema {
 }
 
 // registerStructSchema 将结构体注册到 Components 并返回 $ref
-func registerStructSchema(t reflect.Type) *OASchema {
+func registerStructSchema(t reflect.Type) *Schema {
     name := t.Name()
     if name == "" {
         name = "AnonymousStruct" // 匿名结构体无法引用，只能内联（此处简化处理）
@@ -372,27 +393,27 @@ func registerStructSchema(t reflect.Type) *OASchema {
     }
 
     // 检查是否已注册
-    if globalSpec.Components.Schemas == nil {
-        globalSpec.Components.Schemas = make(map[string]*OASchema)
+    if ApiSpec.Components.Schemas == nil {
+        ApiSpec.Components.Schemas = map[string]*Schema{}
     }
-    if _, ok := globalSpec.Components.Schemas[name]; ok {
-        return &OASchema{Ref: "#/components/schemas/" + name}
+    if _, ok := ApiSpec.Components.Schemas[name]; ok {
+        return &Schema{Ref: "#/components/schemas/" + name}
     }
 
     // 先占位，防止递归死循环
-    globalSpec.Components.Schemas[name] = &OASchema{}
+    ApiSpec.Components.Schemas[name] = &Schema{}
 
     // 生成 Schema
     schema := generateInlineStructSchema(t)
-    globalSpec.Components.Schemas[name] = schema
+    ApiSpec.Components.Schemas[name] = schema
 
-    return &OASchema{Ref: "#/components/schemas/" + name}
+    return &Schema{Ref: "#/components/schemas/" + name}
 }
 
-func generateInlineStructSchema(t reflect.Type) *OASchema {
-    schema := &OASchema{
+func generateInlineStructSchema(t reflect.Type) *Schema {
+    schema := &Schema{
         Type:       "object",
-        Properties: make(map[string]*OASchema),
+        Properties: map[string]*Schema{},
     }
 
     for i := 0; i < t.NumField(); i++ {
@@ -422,10 +443,11 @@ func generateInlineStructSchema(t reflect.Type) *OASchema {
 
         schema.Properties[propName] = propSchema
     }
+
     return schema
 }
 
-const swaggerHTML = `
+const DocsHTML = `
 <!doctype html>
 <html lang="zh">
     <head>

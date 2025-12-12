@@ -2,11 +2,10 @@ package sgin
 
 import (
     "errors"
-    "fmt"
     "net"
     "net/http"
-    "strings"
 
+    "github.com/baagod/sgin/oa"
     "github.com/gin-gonic/gin"
 )
 
@@ -60,15 +59,15 @@ func New(config ...Config) *Engine {
         i:    e.engine,
         e:    e,
         base: "/",
-        op: OAOperation{
-            Responses: map[string]OAResponse{},
-            Security:  []OARequirement{{}},
+        op: oa.Operation{
+            Responses: map[string]oa.Response{},
+            Security:  []oa.Requirement{{}},
         },
     }
 
     // gin.engine 配置
     if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-        _, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[GIN] [ERROR] %v\n", err)
+        debugWarning(err.Error())
     }
 
     // 注册 [日志] 和 [恢复] 中间件
@@ -77,75 +76,31 @@ func New(config ...Config) *Engine {
     // OpenAPI 文档中间件
     if cfg.OpenAPI && cfg.Mode != gin.ReleaseMode {
         e.GET("/openapi.yaml", func(c *Ctx) error {
-            if specYAML, err := globalSpec.YAML(); err == nil {
+            if specYAML, err := oa.ApiSpec.YAML(); err == nil {
                 return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
             }
             return c.Send(ErrInternalServerError())
         })
 
         e.GET("/docs", func(c *Ctx) error {
-            return c.Content(MIMETextHTMLUTF8).Send(swaggerHTML)
+            return c.Content(MIMETextHTMLUTF8).Send(oa.DocsHTML)
         })
     }
 
     return e
 }
 
-func (e *Engine) Routes() gin.RoutesInfo {
-    return e.engine.Routes()
+// Run 将路由器连接到 http.Server 并开始监听和提供 HTTP[S] 请求
+//
+// 提供 cert 和 key 文件路径作为 certfile 参数，可开启 HTTPS 服务。
+func (e *Engine) Run(addr string, certfile ...string) (err error) {
+    if len(certfile) > 0 {
+        return e.engine.RunTLS(addr, certfile[0], certfile[1])
+    }
+    return e.engine.Run(addr)
 }
 
-func (e *Engine) Handler() http.Handler {
-    return e.engine.Handler()
-}
-
-// Run 启动 HTTP 或 HTTPS 服务器。
-// 参数 addr 指定服务器监听的地址，为空则使用 ":8080"。
-// 参数 cert 为可选参数，包含证书和私钥路径，如果提供则启动 HTTPS 服务器；否则启动 HTTP 服务器。
-// 返回值 err 表示启动服务器时可能发生的错误。
-func (e *Engine) Run(addr string, cert ...string) (err error) {
-    defer func() { debugError(err) }()
-    if addr == "" {
-        addr = ":8080"
-    }
-
-    if cert != nil {
-        debug("Listening and serving HTTPS on %s\n", addr)
-        return http.ListenAndServeTLS(addr, cert[0], cert[1], e.Handler())
-    }
-
-    debug("Listening and serving HTTP on %s\n", addr)
-    return http.ListenAndServe(addr, e.Handler())
-}
-
-// RunServer 使用提供的 listener 启动 HTTP 或 HTTPS 服务器。
-// 参数 listener 是一个 net.Listener 接口，用于指定服务器监听的网络连接。
-// 参数 cert 为可选参数，包含证书和私钥路径，如果提供则启动 HTTPS 服务器；否则启动 HTTP 服务器。
-// 返回值 err 表示启动服务器时可能发生的错误。
-func (e *Engine) RunServer(listener net.Listener, cert ...string) (err error) {
-    defer func() { debugError(err) }()
-
-    if cert != nil {
-        debug("Listening and serving HTTPS on %s", listener.Addr())
-        return http.ServeTLS(listener, e.Handler(), cert[0], cert[1])
-    }
-
-    debug("Listening and serving HTTP on %s", listener.Addr())
-    return http.Serve(listener, e.Handler())
-}
-
-func debug(format string, values ...any) {
-    if !gin.IsDebugging() {
-        return
-    }
-    if !strings.HasSuffix(format, "\n") {
-        format += "\n"
-    }
-    _, _ = fmt.Fprintf(gin.DefaultWriter, "[GIN-debug] "+format, values...)
-}
-
-func debugError(err error) {
-    if err != nil && gin.IsDebugging() {
-        _, _ = fmt.Fprintf(gin.DefaultErrorWriter, "[GIN-debug] [ERROR] %v\n", err)
-    }
+// RunListener 将路由器连接到 http.Server, 并开始通过指定的 listener 监听和提供 HTTP 请求。
+func (e *Engine) RunListener(listener net.Listener) (err error) {
+    return e.engine.RunListener(listener)
 }

@@ -6,6 +6,7 @@ import (
     "strings"
     "testing"
 
+    "github.com/baagod/sgin/oa"
     "github.com/gin-gonic/gin"
 )
 
@@ -29,7 +30,7 @@ func TestOpenAPIGeneration(t *testing.T) {
     r := New(Config{OpenAPI: true})
 
     // 注册路由，使用混合传参配置 OpenAPI
-    r.POST("/api/v1/users/:id", func(op *OAOperation) {
+    r.POST("/api/v1/users/:id", func(op *oa.Operation) {
         op.Summary = "创建用户"
         op.Tags = []string{"User"}
     }, func(c *Ctx, req UserReq) (UserRes, error) {
