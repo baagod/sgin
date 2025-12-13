@@ -2,6 +2,7 @@ package oa
 
 import (
     "encoding/json"
+    "fmt"
     "math/bits"
     "net"
     "net/netip"
@@ -92,11 +93,11 @@ type fieldInfo struct {
 // getFields 通过广度优先搜索（BFS）遍历一个类型的所有字段，并在发现每个字段时调用回调函数。
 // 它处理内嵌结构体，并通过 visited 集合避免无限递归。
 // 使用迭代式 BFS 配合 head 索引，实现高效且清晰的队列操作。
-func getFields(typ reflect.Type, callback func(info fieldInfo)) {
+func getFields(t reflect.Type, callback func(info fieldInfo)) {
     // 使用切片模拟队列，并用 head 索引追踪队列头部
-    queue := []reflect.Type{typ}
+    queue := []reflect.Type{t}
     // visited 集合用于防止对同一结构体类型的重复处理
-    visited := map[reflect.Type]struct{}{typ: {}}
+    visited := map[reflect.Type]struct{}{t: {}}
 
     // 队列处理循环：head 索引在每次迭代中递增，len(queue) 会动态更新
     for head := 0; head < len(queue); head++ {
@@ -130,6 +131,35 @@ func getFields(typ reflect.Type, callback func(info fieldInfo)) {
             callback(fieldInfo{Parent: currentTyp, Field: f})
         }
     }
+}
+
+// parseTagValue 根据字段的 Schema 类型，将从 tag 读取的字符串值解析为正确的 Go 类型。
+// 例如，对于一个 integer 字段，它会将 "123" 解析为数字 123。
+func parseTagValue(value, fieldname string, s *Schema) any {
+    // 1. 如果基础类型是 string，直接返回原始值，无需解析。
+    if s.Type == TypeString {
+        return value
+    }
+
+    // 特殊情况：字符串数组，带有逗号分隔且无引号。
+    if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
+        values := make([]string, 0)
+        for _, v := range strings.Split(value, ",") {
+            values = append(values, strings.TrimSpace(v))
+        }
+        return values
+    }
+
+    // 2. 对于所有其他类型，尝试使用 JSON 解码器进行解析
+    var result any
+    value = strings.TrimSpace(value)
+    err := json.Unmarshal([]byte(value), &result)
+    if err != nil {
+        // 返回错误，以便调用者可以决定如何处理（例如，忽略无效的 tag 值）
+        panic(fmt.Errorf("invalid %s tag value '%s' for field '%s': %w", s.Type, value, fieldname, err))
+    }
+
+    return result
 }
 
 // schemaFromType 递归生成 Schema，支持基础类型、切片、Map 和结构体引用
@@ -214,7 +244,7 @@ func schemaFromType(t reflect.Type) *Schema {
             f := info.Field // 当前处理的反射字段信息
 
             // 字段遮蔽判断：如果当前 Go 字段名已被处理过，则跳过
-            // （根据 getFields 的 BFS 顺序，这确保了外层同名字段优先）
+            // (根据 getFields 的 BFS 顺序，这确保了外层同名字段优先)
             if _, ok := fieldSet[f.Name]; ok {
                 return
             }
@@ -222,69 +252,61 @@ func schemaFromType(t reflect.Type) *Schema {
 
             // 1. 解析字段的 JSON 名称和忽略规则 (json tag)
             fieldName := f.Name // 默认使用 Go 字段名
-            jsonTag := f.Tag.Get("json")
-            // 如果 json 标签为 "-"，表示此字段应被 JSON 序列化器完全忽略
-            if jsonTag == "-" {
-                return // 跳过此字段
+            tag := f.Tag.Get("json")
+
+            if tag == "-" { // 跳过忽略的字段
+                return
             }
+
             // 解析 json 标签以获取自定义的 JSON 字段名，例如 `json:"my_field,omitempty"`
-            if parts := strings.Split(jsonTag, ","); len(parts) > 0 && parts[0] != "" {
+            if parts := strings.Split(tag, ","); len(parts) > 0 && parts[0] != "" {
                 fieldName = parts[0]
             }
 
             // 2. 递归调用 schemaFromType 为当前字段的类型生成 Schema
-            fieldSchema := schemaFromType(f.Type)
-            if fieldSchema == nil {
-                // 如果无法为字段类型生成 Schema (例如，不支持的类型)，则跳过此字段
+            fs := schemaFromType(f.Type)
+            if fs == nil { // 如果无法为字段类型生成 Schema，则跳过。
                 return
             }
 
             // 3. 解析字段的元数据标签 (doc, format, default, enum)
-            fieldSchema.Description = f.Tag.Get("doc")
+            fs.Description = f.Tag.Get("doc")
             if v := f.Tag.Get("format"); v != "" {
-                fieldSchema.Format = v
+                fs.Format = v
             }
 
-            // TODO: (待完善) 使用 parseTagValue 对 default 值进行类型转换
+            // 使用 parseTagValue 对 default 值进行类型转换
             if v := f.Tag.Get("default"); v != "" {
-                // 目前：fieldSchema.Default = v
-                // 未来：if parsed, err := parseTagValue(v, fieldSchema); err == nil { fieldSchema.Default = parsed }
-                fieldSchema.Default = v // 暂时仍为字符串
+                fs.Default = parseTagValue(v, f.Name, fs)
             }
 
-            // TODO: (待完善) 使用 parseTagValue 对 enum 值列表进行类型转换
             if v := f.Tag.Get("enum"); v != "" {
-                parts := strings.Split(v, ",")
-                enum := make([]any, 0, len(parts)) // 使用 make([]any, 0, ...) 以便 append
-                for _, p := range parts {
-                    // 目前：enum = append(enum, p)
-                    // 未来：if parsed, err := parseTagValue(p, fieldSchema); err == nil { enum = append(enum, parsed) }
-                    enum = append(enum, p) // 暂时仍为字符串
+                ts := fs                  // 目标 schema，对于数组类型，应该验证其子项。
+                if ts.Type == TypeArray { // 字段是数组
+                    ts = fs.Items
                 }
+
+                enum := make([]any, 0, t.NumField())
+                for _, p := range strings.Split(v, ",") { // 对每个枚举值进行解析
+                    enum = append(enum, parseTagValue(p, f.Name, ts))
+                }
+
                 if len(enum) > 0 {
-                    fieldSchema.Enum = enum
+                    if fs.Type == TypeArray { // 如果字段是数组，枚举应用于子项。
+                        if fs.Items != nil {
+                            fs.Items.Enum = enum
+                        }
+                    } else {
+                        fs.Enum = enum
+                    }
                 }
             }
 
             // 4. 将生成的字段 Schema 添加到属性 map 中
-            props[fieldName] = fieldSchema
+            props[fieldName] = fs
 
             // 5. 处理字段的必填逻辑
-            isReq := true
-            // 规则1：如果 json 标签包含 "omitempty" 或 "omitzero"，则字段为非必填
-            if strings.Contains(jsonTag, "omitempty") || strings.Contains(jsonTag, "omitzero") {
-                isReq = false
-            }
-            // 规则2：`required` 标签可以显式覆盖之前的判断 (例如 `required:"true"`)
-            if v, ok := f.Tag.Lookup("required"); ok {
-                isReq = v == "true"
-            }
-            // 规则3：兼容 gin 的 `binding` 标签，如果包含 "required"，则视为必填
             if strings.Contains(f.Tag.Get("binding"), "required") {
-                isReq = true
-            }
-
-            if isReq {
                 required = append(required, fieldName)
             }
         })
@@ -293,6 +315,7 @@ func schemaFromType(t reflect.Type) *Schema {
         if len(props) > 0 {
             s.Properties = props
         }
+
         if len(required) > 0 {
             s.Required = required
         }
@@ -301,7 +324,6 @@ func schemaFromType(t reflect.Type) *Schema {
         if name != "" {
             return &Schema{Ref: "#/components/schemas/" + name}
         }
-
     case reflect.Interface:
         // 接口可以是任意对象
     default:
@@ -312,7 +334,9 @@ func schemaFromType(t reflect.Type) *Schema {
     case TypeBoolean, TypeInteger, TypeNumber, TypeString:
         // 作为指针的标量类型默认可为空。
         // 可以通过结构体中的 `nullable:"false"` 字段标签覆盖。
-        s.Type = []any{s.Type, "null"}
+        if isPtr {
+            s.Type = []any{s.Type, "null"}
+        }
     }
 
     return s
