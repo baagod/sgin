@@ -1,5 +1,6 @@
 .idea
 .playwright-mcp
+/huma
 /GEMINI.md
 /evolution.md
 /COMMIT_MSG.md
