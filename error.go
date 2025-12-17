@@ -25,6 +25,11 @@ func NewError(code int, msg ...string) *Error {
 
 // --- 常用预定义错误 (函数形式，支持自定义消息) ---
 
+// StatusNotModified 304
+func StatusNotModified(msg ...string) *Error {
+    return NewError(http.StatusNotModified, msg...)
+}
+
 // ErrBadRequest 400
 func ErrBadRequest(msg ...string) *Error {
     return NewError(http.StatusBadRequest, msg...)

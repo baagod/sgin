@@ -41,46 +41,18 @@ var (
 )
 
 type Schema struct {
-    Type                 any                 `yaml:"type,omitempty"`
-    Title                string              `yaml:"title,omitempty"`
-    Description          string              `yaml:"description,omitempty"`
-    Ref                  string              `yaml:"$ref,omitempty"`
-    Format               string              `yaml:"format,omitempty"`
-    ContentEncoding      string              `yaml:"contentEncoding,omitempty"`
-    Default              any                 `yaml:"default,omitempty"`
-    Examples             []any               `yaml:"examples,omitempty"`
-    Items                *Schema             `yaml:"items,omitempty"`                // For arrays
-    AdditionalProperties any                 `yaml:"additionalProperties,omitempty"` // Schema or bool
-    Properties           map[string]*Schema  `yaml:"properties,omitempty"`
-    Enum                 []any               `yaml:"enum,omitempty"`
-    MultipleOf           *float64            `yaml:"multipleOf,omitempty"`
-    Pattern              string              `yaml:"pattern,omitempty"`
-    PatternDescription   string              `yaml:"patternDescription,omitempty"`
-    UniqueItems          bool                `yaml:"uniqueItems,omitempty"`
-    Required             []string            `yaml:"required,omitempty"`
-    ReadOnly             bool                `yaml:"readOnly,omitempty"`
-    WriteOnly            bool                `yaml:"writeOnly,omitempty"`
-    Deprecated           bool                `yaml:"deprecated,omitempty"`
-    Extensions           map[string]any      `yaml:",inline"`
-    DependentRequired    map[string][]string `yaml:"dependentRequired,omitempty"`
-
-    OneOf []*Schema `yaml:"oneOf,omitempty"`
-    AnyOf []*Schema `yaml:"anyOf,omitempty"`
-    AllOf []*Schema `yaml:"allOf,omitempty"`
-    Not   *Schema   `yaml:"not,omitempty"`
-
-    // OpenAPI specific fields
-    Discriminator *Discriminator `yaml:"discriminator,omitempty"`
-}
-
-type Discriminator struct {
-    // PropertyName in the payload that will hold the discriminator value.
-    // REQUIRED.
-    PropertyName string `yaml:"propertyName"`
-
-    // Mapping object to hold mappings between payload values and schema names or
-    // references.
-    Mapping map[string]string `yaml:"mapping,omitempty"`
+    Type                 any                `yaml:"type,omitempty"`
+    Title                string             `yaml:"title,omitempty"`
+    Description          string             `yaml:"description,omitempty"`
+    Ref                  string             `yaml:"$ref,omitempty"`
+    Format               string             `yaml:"format,omitempty"`
+    ContentEncoding      string             `yaml:"contentEncoding,omitempty"`
+    Default              any                `yaml:"default,omitempty"`
+    Items                *Schema            `yaml:"items,omitempty"`                // For arrays
+    AdditionalProperties any                `yaml:"additionalProperties,omitempty"` // Schema or bool
+    Properties           map[string]*Schema `yaml:"properties,omitempty"`
+    Enum                 []any              `yaml:"enum,omitempty"`
+    Required             []string           `yaml:"required,omitempty"`
 }
 
 // fieldInfo 用于存储字段的详细信息，包括其直接父级类型。
@@ -163,7 +135,8 @@ func parseTagValue(value, fieldname string, s *Schema) any {
 }
 
 // schemaFromType 递归生成 Schema，支持基础类型、切片、Map 和结构体引用
-func schemaFromType(t reflect.Type) *Schema {
+// nameHint 是可选参数，用于为匿名结构体提供命名提示 (例如: ParentFieldStruct)
+func (oa *OpenAPI) schemaFromType(t reflect.Type, nameHint ...string) *Schema {
     isPtr := t.Kind() == reflect.Ptr // 代表可以为 空 (nil) 的数据类型
     if isPtr {
         t = t.Elem()
@@ -208,27 +181,33 @@ func schemaFromType(t reflect.Type) *Schema {
             s.ContentEncoding = "base64"
         } else {
             s.Type = TypeArray
-            s.Items = schemaFromType(t.Elem())
+            s.Items = oa.schemaFromType(t.Elem(), nameHint...)
         }
     case reflect.Map:
         s.Type = TypeObject
-        s.AdditionalProperties = schemaFromType(t.Elem())
+        s.AdditionalProperties = oa.schemaFromType(t.Elem(), nameHint...)
     case reflect.Struct:
         name := t.Name()
-        // 如果是命名结构体（非匿名），则处理组件注册和引用逻辑
+        s.Type = TypeObject
+
+        if oa.config.SchemaNamer != nil {
+            name = oa.config.SchemaNamer(t)
+        }
+
+        // 如果是匿名结构体，尝试使用传入的提示作为名称。
+        if name == "" && len(nameHint) > 0 {
+            name = nameHint[0]
+        }
+
+        // 如果是命名结构体（非匿名，或通过 hint 获得了名字），则处理组件注册和引用逻辑
         if name != "" {
             // 检查该类型是否已在全局组件中注册过
-            if _, ok := Default.Components.Schemas[name]; ok {
+            if _, ok := oa.Components.Schemas[name]; ok {
                 // 如果已注册，直接返回一个指向该组件的引用，以避免重复定义并处理递归结构
                 return &Schema{Ref: "#/components/schemas/" + name}
             }
             // 如果未注册，先创建一个占位符 Schema 并注册，以防止在处理递归字段时陷入无限循环。
-            // 例如 type Node struct { Next *Node }
-            s.Type = TypeObject
-            Default.Components.Schemas[name] = s
-        } else {
-            // 如果是匿名结构体，则直接作为内联对象处理
-            s.Type = TypeObject
+            oa.Components.Schemas[name] = s
         }
 
         // required 用于收集所有必填字段的名称
@@ -263,14 +242,23 @@ func schemaFromType(t reflect.Type) *Schema {
                 fieldName = parts[0]
             }
 
-            // 2. 递归调用 schemaFromType 为当前字段的类型生成 Schema
-            fs := schemaFromType(f.Type)
+            // 2. 为匿名结构体生成命名提示 (ParentName + FieldName + "Struct")
+            var subHint string
+            // 只有当当前字段是匿名结构体，且父结构体有名称时，才生成提示
+            if f.Type.Kind() == reflect.Struct && f.Type.Name() == "" && name != "" {
+                subHint = name + f.Name + "Struct"
+            }
+
+            // 递归调用 schemaFromType 为当前字段的类型生成 Schema，并传入提示
+            fs := oa.schemaFromType(f.Type, subHint)
             if fs == nil { // 如果无法为字段类型生成 Schema，则跳过。
                 return
             }
 
             // 3. 解析字段的元数据标签 (doc, format, default, enum)
             fs.Description = f.Tag.Get("doc")
+            fs.ContentEncoding = f.Tag.Get("encoding")
+
             if v := f.Tag.Get("format"); v != "" {
                 fs.Format = v
             }
@@ -320,7 +308,7 @@ func schemaFromType(t reflect.Type) *Schema {
             s.Required = required
         }
 
-        // 7. 如果是命名结构体，在填充完所有属性后，最终返回对该组件的引用
+        // 7. 如果是命名结构体，在填充完所有属性后，最终返回对该组件的引用。
         if name != "" {
             return &Schema{Ref: "#/components/schemas/" + name}
         }

@@ -23,7 +23,8 @@ type IRouter interface {
 type Router struct {
     i    gin.IRouter
     e    *Engine
-    base string
+    base string // 基础路径
+    api  *oa.OpenAPI
     op   oa.Operation
 }
 
@@ -49,35 +50,29 @@ func (r *Router) DELETE(path string, handlers ...Handler) IRouter {
 }
 
 func (r *Router) Group(path string, handlers ...Handler) IRouter {
-    realHandlers, operation := separateHandlers(handlers)
+    realHandlers, addOp := separateHandlers(handlers)
     grp := r.i.Group(path, handler(r.e, realHandlers...)...)
+    router := &Router{i: grp, e: r.e, base: r.fullPath(path), api: r.api}
 
-    op := oa.Operation{
-        Responses: map[string]oa.Response{},
-        Security:  []oa.Requirement{{}},
+    if r.e.cfg.OpenAPI != nil {
+        router.op = oa.Operation{Responses: map[string]*oa.Response{}}
+        if addOp != nil {
+            addOp(&router.op)
+        }
     }
 
-    if operation != nil {
-        operation(&op)
-    }
-
-    return &Router{i: grp, e: r.e, base: r.fullPath(path), op: op}
+    return router
 }
 
 func (r *Router) Handle(method, path string, handlers ...Handler) IRouter {
-    realHandlers, operation := separateHandlers(handlers) // 在这里声明并赋值
+    realHandlers, addOp := separateHandlers(handlers)
 
-    if r.e.cfg.OpenAPI != nil {
-        fullPath := r.fullPath(path)
-        cloneOp := r.op.Clone()
-
-        if operation != nil {
-            operation(cloneOp)
+    if len(realHandlers) > 0 && r.e.cfg.OpenAPI != nil {
+        op := r.op.Clone()
+        if addOp != nil {
+            addOp(op)
         }
-
-        if len(realHandlers) > 0 {
-            oa.Register(fullPath, method, realHandlers[len(realHandlers)-1], cloneOp)
-        }
+        r.api.Register(op, r.fullPath(path), method, realHandlers[len(realHandlers)-1])
     }
 
     r.i.Handle(method, path, handler(r.e, realHandlers...)...)

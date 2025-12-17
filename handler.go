@@ -11,7 +11,7 @@ import (
     "github.com/go-playground/validator/v10"
 )
 
-type Handler any // Gin原生 | sgin V2 智能 Handler
+type Handler any // gin.HandlerFunc | func(*sgin.Ctx[, Input]) T | (T, error)
 
 // handler 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
 func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {

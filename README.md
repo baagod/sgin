@@ -1,124 +1,150 @@
 # sgin
 
-这是一个 [gin](https://github.com/gin-gonic/gin) 的魔改版本，旨在让其更加简单。
+这是一个 [gin](https://github.com/gin-gonic/gin) 的封装版本，旨在提供更加智能、简洁的 API 开发体验。它通过增强的 Handler 签名、统一的参数绑定和自动化的 OpenAPI 文档生成，让开发者专注于业务逻辑。
 
-`sgin` 拥有一个可选的默认配置。
+## 安装
 
-```go
-r := sgin.New(sgin.Config{
-    Mode: gin.DebugMode, // 默认值
-    ErrorHandler: func(c *sgin.Ctx, err error) { // 默认错误处理
-        var e *Error
-        code := StatusInternalServerError
-    
-        if errors.As(err, &e) && e.Code > 0 { // 如果是 *Error
-            code = e.Code
-        } else if stc := c.StatusCode(); stc != 200 && stc != 0 {
-            code = stc
-        }
-    
-        return c.Status(code).Send(err.Error())
-    }
-})
-
-r.Run(":8080")
+```bash
+go get github.com/baagod/sgin
 ```
 
-## 处理方法
-
-`sgin` 主要修改了原生处理函数，处理函数的签名变成了：`func(*sgin.Ctx[, T]) T | (T, error)` 。
-
-### 接收请求参数
-
-其中跟在 `*sgin.Ctx` 后面的 `T` 是可选的，它接收来自请求传递的数据。例如请求 `index?name=p1&age=10`
-，这会将查询参数绑定到结构体 `p` 中。
+## 快速开始
 
 ```go
-r.Get("/index", func(c *sgin.Ctx, p struct{
-    Name string `form:"name"`
-    Age  int    `form:"age"`
-}) {
-    // p => {"p1", 10}
-})
+package main
+
+import (
+    "github.com/baagod/sgin"
+    "github.com/baagod/sgin/oa"
+)
+
+func main() {
+    // 1. 初始化引擎 (可选配置)
+    r := sgin.New(sgin.Config{
+        // 开启 OpenAPI 文档支持 (测试功能)
+        OpenAPI: oa.New(oa.Config{}), 
+    })
+
+    // 2. 定义路由
+    r.GET("/", func(c *sgin.Ctx) string {
+        return "Hello sgin!"
+    })
+
+    // 3. 启动服务
+    r.Run(":8080")
+}
 ```
 
-接收 JSON 参数，只需将标签改为 `json` (`xml` 同理)：
+## 核心特性
+
+### 1. 智能 Handler
+
+`sgin` 支持多种灵活的 Handler 签名，自动处理参数绑定和响应发送。
+
+**支持的签名示例：**
+
+- `func(*gin.Context)` 兼容 gin
+- `func(*sgin.Ctx) error`
+- `func(*sgin.Ctx) (data any, err error)`
+- `func(*sgin.Ctx, input Struct) (data any, err error)`
+- `func(*sgin.Ctx, input Struct) (data any)`
+
+#### 请求参数绑定
+
+只需在 Handler 的第二个参数定义结构体，`sgin` 会自动将 **URI**、**Header**、**Query**、**Form** 和 **Body (JSON/XML)** 的数据绑定到该结构体上。
 
 ```go
-r.Get("/index", func(c *sgin.Ctx, p struct{
-    Name string `json:"name"`
-    Age  int    `json:"age"`
-}) {
-    // p => {"p1", 10}
-})
-```
+type UserReq struct {
+    ID    int    `uri:"id" binding:"required"`
+    Name  string `form:"name" binding:"required" failtip:"姓名不能为空"`
+    Age   int    `form:"age" default:"18"`
+    Token string `header:"Authorization"`
+}
 
-### 返回响应
-
-要返回响应数据，你可以使用 `c.Send()`，或在处理函数中定义返回值（稍后介绍）。
-
-```go
-r.Get("/index", func(c *sgin.Ctx) {
-    c.Sned("Very OK")
-})
-```
-
-`Send(any, format ...string)` 方法会自动根据请求头 `Accept` 返回对应格式的数据，也可以手动指定。
-
-`Send()` 细节：
-
-- 如果发送数字，将被仅当做状态码返回。
-- 如果发送 `string` 或 `error` 将返回原字符串或 `error.Error()`。
-- 将格式传递给 `format` 参数，将返回对应类型的数据。例如 `c.Send(map[string]any{}, sgin.FormatJSON)`。
-- 如果你有状态码和错误一起返回：`c.Send(sgin.NewError(statusCode, msg))` 。
-- 当然你可以先设置状态码后发送你的数据：`c.Status(200).Send(...)`。
-
-----
-
-除了可以使用 `Send()` 返回响应数据外，还可以将其定义为处理函数的返回值，返回值类型可以为：
-
-- `T`: 任意响应体；
-- `(int, T)`: 状态码和任意响应体；
-- `(T, error)`: 响应体和错误。
-
-注意，`T` 是任意类型，通常为 `int`, `error`, `string`, `Any`，处理函数的返回值类型和使用 `Send()` 返回的数据基本是一致的。
-
-```go
-r.Get("/index", func(c *sgin.Ctx) int {
-    return 401 // 只返回状态码
-})
-
-r.Get("/index", func(c *sgin.Ctx) error {
-    return errors.New("error") // 在不指定错误状态码的情况下，状态码默认为 500。
-})
-
-r.Get("/index", func(c *sgin.Ctx) (r sgin.Response) {
-    return r.OK() // 返回任意响应
-})
-
-r.Get("/index", func(c *sgin.Ctx) (r *map[string]any, error) {
-    return nil, errors.new("test error") // 返回响应或错误
-})
-
-r.Get("/index", func(c *sgin.Ctx) (int, map[string]any) {
-    return nil, map[string]any{"msg": "test"} // 返回状态码和响应
+r.POST("/users/:id", func(c *sgin.Ctx, req UserReq) (map[string]any, error) {
+    // req 已自动绑定并校验通过
+    return map[string]any{
+        "id":   req.ID,
+        "name": req.Name,
+        "age":  req.Age,
+    }, nil
 })
 ```
 
-## Api
+#### 统一响应处理
 
-### `Ctx`
+Handler 的返回值会被自动处理：
+- **`error`**: 自动调用配置的 `ErrorHandler`。
+- **`data`**: 自动根据请求头 `Accept` 格式化为 JSON, XML 或 Text。
 
-- `Args() map[string]any`：返回请求参数集合，无论是 GET、POST 还是 JSON 等请求；
-- `ArgInt(key string, e ...string)` 等：将请求参数转为对应的类型；
-- `Send(any, format ...string)` 发送响应。
-- `SendHTML(string, any)` 以 `HTML` 模板作为响应发送。
-- `Locals(key string, ...any) any`：设置或将值存储到上下文。
-- `Header(key string, ...any) any`：设置或写入响应头。此外 `sgin`
-  定义了许多枚举来帮助你快速找到某个请求头，例如要获取内容类型：`Header(sgin.HeaderContentType)`；
-- `Status(int) *Ctx`：设置响应状态码；
-- `StatusCode() int`：获取响应状态码；
-- `Method() string`：获取请求方法；
-- `Path(full ...bool) string`：返回部分或全部请求路径；
-- `IP() string`：返回远程客户端 IP，如果是本机则返回 127.0.0.1；
-- ... 其他来自 `gin.Context` 的方法。
+你也可以使用 `c.Send()` 手动发送：
+
+```go
+c.Send("Hello")                 // Text
+c.Send(User{}, sgin.FormatJSON) // JSON
+c.Send(User{}, sgin.FormatXML)  // 或者手动指定格式
+c.Send(err)                     // Error
+```
+
+### 2. 增强的 Context (`sgin.Ctx`)
+
+`sgin.Ctx` 封装了 `gin.Context`，提供了更便捷的方法：
+
+- **参数获取**: `Values()` 方法统一获取所有来源的参数（Query, Form, JSON Body 等）。
+- **类型转换**: `ValueInt("age")`, `ValueBool("is_admin")` 等。
+- **文件处理**: `ValueFile("file")` 获取上传文件。
+- **响应控制**: `Status(200)`, `SetHeader("Key", "Val")`。
+- **TraceID**: 自动生成或传递 `X-Request-ID`。
+- **Gin**: 返回 `*gin.Context`。
+
+```go
+func(c *sgin.Ctx) {
+    id := c.ValueInt("id", 0) // 获取参数，默认值为 0
+    ip := c.IP()
+    traceID := c.TraceID()
+}
+```
+
+### 3. OpenAPI 文档 (测试版)
+
+`sgin` 可以通过分析 Handler 的输入输出结构体，自动生成 OpenAPI 3.1 文档。
+
+**启用方法**:
+在 `sgin.Config` 中配置 `OpenAPI` 字段。
+
+**文档自定义**:
+在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
+
+```go
+type LoginReq struct {
+    Username string `json:"username" doc:"用户名"`
+    Password string `json:"password" doc:"密码"`
+}
+
+// 注册路由时添加文档描述
+r.POST("/login", func(op *oa.Operation) {
+    op.Summary = "用户登录"
+    op.Tags = []string{"Auth"}
+}, func(c *sgin.Ctx, req LoginReq) (string, error) {
+    return "token-xxx", nil
+})
+```
+
+启动后访问 `/openapi.yaml` 查看生成的规范。
+
+## 配置
+
+```go
+conf := sgin.Config{
+    Mode: gin.ReleaseMode, // 运行模式
+    // 自定义错误处理
+    ErrorHandler: func(c *sgin.Ctx, err error) error {
+        return c.Status(500).Send(map[string]any{"error": err.Error()})
+    },
+    // 自定义日志
+    Logger: func(c *sgin.Ctx, msg string, jsonMsg string) bool {
+        // 返回 true 使用默认日志输出，false 拦截
+        return true
+    },
+}
+```
