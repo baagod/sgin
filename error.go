@@ -25,8 +25,8 @@ func NewError(code int, msg ...string) *Error {
 
 // --- 常用预定义错误 (函数形式，支持自定义消息) ---
 
-// StatusNotModified 304
-func StatusNotModified(msg ...string) *Error {
+// NotModified 304
+func NotModified(msg ...string) *Error {
     return NewError(http.StatusNotModified, msg...)
 }
 
@@ -70,8 +70,8 @@ func ErrProxyAuthRequired(msg ...string) *Error {
     return NewError(http.StatusProxyAuthRequired, msg...)
 }
 
-// ErrRequestTimeout 408
-func ErrRequestTimeout(msg ...string) *Error {
+// ErrTimeout 408
+func ErrTimeout(msg ...string) *Error {
     return NewError(http.StatusRequestTimeout, msg...)
 }
 
@@ -95,13 +95,13 @@ func ErrPreconditionFailed(msg ...string) *Error {
     return NewError(http.StatusPreconditionFailed, msg...)
 }
 
-// ErrRequestEntityTooLarge 413
-func ErrRequestEntityTooLarge(msg ...string) *Error {
+// ErrEntityTooLarge 413
+func ErrEntityTooLarge(msg ...string) *Error {
     return NewError(http.StatusRequestEntityTooLarge, msg...)
 }
 
-// ErrRequestURITooLong 414
-func ErrRequestURITooLong(msg ...string) *Error {
+// ErrURITooLong 414
+func ErrURITooLong(msg ...string) *Error {
     return NewError(http.StatusRequestURITooLong, msg...)
 }
 
@@ -110,8 +110,8 @@ func ErrUnsupportedMediaType(msg ...string) *Error {
     return NewError(http.StatusUnsupportedMediaType, msg...)
 }
 
-// ErrRequestedRangeNotSatisfiable 416
-func ErrRequestedRangeNotSatisfiable(msg ...string) *Error {
+// ErrRangeNotSatisfiable 416
+func ErrRangeNotSatisfiable(msg ...string) *Error {
     return NewError(http.StatusRequestedRangeNotSatisfiable, msg...)
 }
 
@@ -165,8 +165,8 @@ func ErrTooManyRequests(msg ...string) *Error {
     return NewError(http.StatusTooManyRequests, msg...)
 }
 
-// ErrRequestHeaderFieldsTooLarge 431
-func ErrRequestHeaderFieldsTooLarge(msg ...string) *Error {
+// ErrHeaderFieldsTooLarge 431
+func ErrHeaderFieldsTooLarge(msg ...string) *Error {
     return NewError(http.StatusRequestHeaderFieldsTooLarge, msg...)
 }
 
