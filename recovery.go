@@ -56,11 +56,9 @@ func Recovery(c *Ctx) {
                 }
             }
 
-            // 获取堆栈信息
-            stack := stack(3)
+            // 如果是连接断开，通常不需要打印花哨的日志，安静记录即可。
             req, _ := httputil.DumpRequest(c.Request, false)
             if brokenPipe {
-                // 如果是连接断开，通常不需要打印花哨的日志，安静记录即可
                 fmt.Printf("%s[BROKEN PIPE]%s %s\n%s\n", red, reset, err, string(req))
                 _ = gc.Error(err)
                 gc.Abort()
@@ -68,9 +66,8 @@ func Recovery(c *Ctx) {
             }
 
             // --- 构建漂亮的日志 ---
-            logStr := buildPanicLog(c, err, stack, req)
-
-            // 输出日志：如果有回调则给回调，否则打印到 Stdout
+            // 输出日志：如果有回调则给回调，否则打印到 Stdout。
+            logStr := buildPanicLog(c, err, stack(3), req)
             if recovery := c.engine.cfg.Recovery; recovery != nil {
                 recovery(c, logStr)
             } else {
@@ -102,63 +99,67 @@ func buildPanicLog(c *Ctx, err error, stack *source, req []byte) string {
 
     // 打印源码上下文（Killer Feature）
     sb.WriteString(fmt.Sprintf("%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line))
-    printSource(&sb, stack.file, stack.line)
+    printSource(&sb, stack)
     sb.WriteString(fmt.Sprintf("%sPANIC RECOVERED END%s\n\n", red+bold, reset))
 
     return sb.String()
 }
 
-// printSource 读取文件并打印出错行及其前后几行
-// writer: 输出目标，通常是 strings.Builder 或 os.Stdout
-func printSource(writer io.Writer, filename string, line int) {
-    f, err := os.Open(filename)
+// printSource 读取文件并打印出错行及其前后几行 (注释中假设报错行是第 100 行)
+func printSource(w io.Writer, s *source) {
+    f, err := os.Open(s.file)
     if err != nil {
         return
     }
     defer f.Close()
 
     var lines []string
-    minIndent, start, end := 1000, line-3, line+3
+    minIndent, start, end := 1000, s.line-3, s.line+3
     scanner := bufio.NewScanner(f)
 
     for cur := 1; scanner.Scan() && cur <= end; cur++ {
-        if cur >= start {
-            text := strings.Replace(scanner.Text(), "\t", "    ", -1)
-            lines = append(lines, text)
-            // 计算缩进：原长度 - 去除左空格后的长度
-            if trimmed := strings.TrimLeft(text, " "); trimmed != "" {
-                if indent := len(text) - len(trimmed); indent < minIndent {
-                    minIndent = indent
-                }
+        if cur < start {
+            continue // 只有行号进入了视窗 (>=97) 才开始处理
+        }
+
+        // 统一格式：把 Tab 变成 4 个空格，防止排版乱掉。
+        text := strings.ReplaceAll(scanner.Text(), "\t", "    ")
+        lines = append(lines, text)
+
+        // 核心逻辑：计算这行代码左边有几个空格
+        if trimmed := strings.TrimLeft(text, " "); trimmed != "" {
+            // indent = 原始长度 - 去掉左空格后的长度 = 左边空格的数量
+            if indent := len(text) - len(trimmed); indent < minIndent {
+                minIndent = indent // 更新最小缩进值
             }
         }
     }
 
     for i, code := range lines {
+        // 裁剪动作：如果这行代码长度够长，就切掉 minIndent (4个字符)。
         if minIndent < 1000 && len(code) >= minIndent {
             code = code[minIndent:]
         }
-
-        if lineNum := start + i; lineNum == line {
-            _, _ = fmt.Fprintf(writer, "  %s%d > %s%s\n", red+bold, lineNum, code, reset)
-        } else {
-            _, _ = fmt.Fprintf(writer, "  %s%d   %s%s\n", dim, lineNum, code, reset)
+        if row := start + i; row == s.line { // 报错行 (100)
+            _, _ = fmt.Fprintf(w, "  %s%d > %s%s\n", red+bold, row, code, reset)
+        } else { // 上下文行
+            _, _ = fmt.Fprintf(w, "  %s%d   %s%s\n", dim, row, code, reset)
         }
     }
 }
 
 // stack 获取调用栈中第一个由于用户代码触发的帧
 func stack(skip int) *source {
-    // 我们最多往上找 32 层
-    for i := skip; i < 32; i++ {
+    for i := skip; i < 32; i++ { // 最多往上找 32 层
         pc, file, line, ok := runtime.Caller(i)
         if !ok {
             break
         }
 
-        // 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码
+        // 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码。
         if !strings.Contains(file, "runtime/") &&
             !strings.Contains(file, "github.com/gin-gonic/gin") &&
+            !strings.Contains(file, "github.com/baagod/sgin") &&
             !strings.Contains(file, "sgin/recovery.go") /* 过滤自己 */ {
             return &source{
                 file:     file,
