@@ -18,10 +18,10 @@ type Engine struct {
 type Config struct {
     Mode           string   // gin.DebugMode | gin.ReleaseMode | gin.TestMode
     TrustedProxies []string // gin.SetTrustedProxies
-    Recovery       func(*Ctx, string)
-    ErrorHandler   func(*Ctx, error) error
+    Recovery       func(c *Ctx, out, plain string)
+    ErrorHandler   func(c *Ctx, err error) error
     // 日志记录器回调，参数为 [文本] 和 [JSON] 消息，返回 true 输出默认日志。
-    Logger  func(*Ctx, string, string) bool
+    Logger  func(c *Ctx, text string, s string) bool
     OpenAPI *oa.OpenAPI
 }
 

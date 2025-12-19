@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "os"
     "time"
 
     "github.com/baagod/sgin"
@@ -25,11 +26,34 @@ type UserResp struct {
     IsValid *bool     `json:"is_valid"`
 }
 
+func level3() {
+    panic(fmt.Errorf("这是一次有意的测试 Panic"))
+}
+
+func level2() {
+    level3()
+}
+
+func level1() {
+    level2()
+}
+
 func main() {
-    // 初始化 sgin 引擎，并开启 OpenAPI 文档服务
     r := sgin.New(sgin.Config{
-        Mode:    gin.DebugMode, // 调试模式
-        OpenAPI: oa.New(oa.Config{}),
+        Mode:    gin.DebugMode,       // 调试模式
+        OpenAPI: oa.New(oa.Config{}), // 开启 OpenAPI 文档服务
+        Recovery: func(c *sgin.Ctx, out, plain string) {
+            fmt.Print(out)
+            f, _ := os.OpenFile("log.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+            defer f.Close()
+            _, _ = f.WriteString(plain)
+        },
+    })
+
+    // 注册一个触发 Panic 的测试路由
+    r.GET("panic", func(c *sgin.Ctx) error {
+        level1()
+        return nil
     })
 
     // 注册一个 V2 智能 Handler
@@ -41,34 +65,6 @@ func main() {
         }
         return user, nil
     })
-
-    // // 私有路由组，需要鉴权
-    // secure := r.Group("/api/v1", AuthMiddleware, func(op *sgin.OAOperation) {
-    //     op.Security = []sgin.OARequirement{{"bearerAuth": {}}}
-    //     op.Tags = []string{"auth"}
-    // })
-    //
-    // secure.GET("/secure", func(op *sgin.OAOperation) {
-    //     // op.Summary = "#"
-    //     // op.Description = ""
-    // }, func(c *sgin.Ctx) (gin.H, error) {
-    //     userID := c.Get("userID").(string) // 从 Context 中获取中间件设置的用户ID
-    //     token := c.Header("Authorization")
-    //     return gin.H{
-    //         "message": "Welcome to the secure area!",
-    //         "userID":  userID,
-    //         "token":   token,
-    //     }, nil
-    // })
-
-    // r.GET("/test", func(c *sgin.Ctx, i UserResp) *UserResp {
-    //     return &UserResp{}
-    // })
-
-    // 简单的健康检查路由
-    // r.GET("/health", func(c *sgin.Ctx) string {
-    //     return "Service is healthy!"
-    // })
 
     fmt.Println("Sgin 服务器正在端口 :8080 运行...")
     fmt.Println("请访问 http://localhost:8080/docs 查看 API 文档。")

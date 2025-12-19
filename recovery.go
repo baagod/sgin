@@ -6,12 +6,15 @@ import (
     "fmt"
     "io"
     "net"
-    "net/http/httputil"
     "os"
+    "path/filepath"
+    "regexp"
     "runtime"
     "strings"
     "time"
 )
+
+var plaintext = regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString
 
 // ANSI Color Codes
 const (
@@ -22,11 +25,11 @@ const (
     blue    = "\033[34m"
     magenta = "\033[35m"
     cyan    = "\033[36m"
-    white   = "\033[37m"
     bold    = "\033[1m"
-    dim     = "\033[2m"
     bgRed   = "\033[41m"
     bgBlue  = "\033[44m"
+    black   = "\033[30m"
+    white   = "\033[97m"
 )
 
 // source 存储堆栈的关键信息
@@ -57,9 +60,8 @@ func Recovery(c *Ctx) {
             }
 
             // 如果是连接断开，通常不需要打印花哨的日志，安静记录即可。
-            req, _ := httputil.DumpRequest(c.Request, false)
             if brokenPipe {
-                fmt.Printf("%s[BROKEN PIPE]%s %s\n%s\n", red, reset, err, string(req))
+                fmt.Printf("%s[BROKEN PIPE]%s %s\n", red, reset, err)
                 _ = gc.Error(err)
                 gc.Abort()
                 return
@@ -67,11 +69,11 @@ func Recovery(c *Ctx) {
 
             // --- 构建漂亮的日志 ---
             // 输出日志：如果有回调则给回调，否则打印到 Stdout。
-            logStr := buildPanicLog(c, err, stack(3), req)
+            out := buildPanicLog(c, err, stacks(3))
             if recovery := c.engine.cfg.Recovery; recovery != nil {
-                recovery(c, logStr)
+                recovery(c, out, plaintext(out, ""))
             } else {
-                fmt.Print(logStr)
+                fmt.Print(out)
             }
 
             _ = c.Send(ErrInternalServerError()) // 返回 500 响应
@@ -81,26 +83,27 @@ func Recovery(c *Ctx) {
     gc.Next()
 }
 
-func buildPanicLog(c *Ctx, err error, stack *source, req []byte) string {
-    var sb strings.Builder
+func buildPanicLog(c *Ctx, err error, stacks []*source) string {
+    sb := &strings.Builder{}
     t := time.Now().Format("2006-01-02 15:04:05")
 
-    sb.WriteString(fmt.Sprintf("\n%sPANIC RECOVERED BEGIN%s\n", red+bold, reset))
-    sb.WriteString(fmt.Sprintf("%sTime:%s     %s\n", green, reset, t))
-    sb.WriteString(fmt.Sprintf("%sRequest:%s  %s %s\n", yellow, reset, c.Request.Method, c.Request.URL.Path))
-    sb.WriteString(fmt.Sprintf("%sIP:%s       %s\n", yellow, reset, c.IP()))
-    sb.WriteString(fmt.Sprintf("%sTraceID:%s  %s\n", yellow, reset, c.traceid))
-    sb.WriteString(fmt.Sprintf("%sError:%s    %v\n", red, reset, err))
+    printf(sb, "\n%s PANIC RECOVERED %s\n", bgRed+white+bold, reset)
+    printf(sb, "%sTime:%s         %s\n", green, reset, t)
+    printf(sb, "%sRequest:%s      %s %s\n", yellow, reset, c.Request.Method, c.Request.URL.Path)
+    printf(sb, "%sHost:%s         %s\n", white, reset, c.Request.Host)
+    printf(sb, "%sContent-Type:%s %s\n", yellow, reset, c.Header(HeaderContentType))
+    printf(sb, "%sIP:%s           %s\n", yellow, reset, c.IP())
+    printf(sb, "%sTraceID:%s      %s\n", yellow, reset, c.traceid)
+    printf(sb, "%sError:%s        %v\n", red, reset, err)
 
-    // 打印 Headers
-    headers := "  " + strings.ReplaceAll(string(req), "\n", "\n  ")
-    headers = strings.TrimSuffix(headers, "\n  ")
-    sb.WriteString(fmt.Sprintf("%sHeaders:%s\n%s", magenta, reset, headers))
-
-    // 打印源码上下文（Killer Feature）
-    sb.WriteString(fmt.Sprintf("%sFile:%s %s:%d\n", cyan, reset, stack.file, stack.line))
-    printSource(&sb, stack)
-    sb.WriteString(fmt.Sprintf("%sPANIC RECOVERED END%s\n\n", red+bold, reset))
+    // 打印源码上下文 (Killer Feature)
+    for i, s := range stacks {
+        format := "%sFile:%s %s:%d %s%s()%s\n"
+        printf(sb, format, cyan, reset, shortenPath(s.file), s.line, magenta, s.funcName, reset)
+        if printSource(sb, s); i < len(stacks)-1 {
+            sb.WriteString("\n")
+        }
+    }
 
     return sb.String()
 }
@@ -141,33 +144,89 @@ func printSource(w io.Writer, s *source) {
             code = code[minIndent:]
         }
         if row := start + i; row == s.line { // 报错行 (100)
-            _, _ = fmt.Fprintf(w, "  %s%d > %s%s\n", red+bold, row, code, reset)
+            printf(w, "  %s%d > %s%s\n", red+bold, row, code, reset)
         } else { // 上下文行
-            _, _ = fmt.Fprintf(w, "  %s%d   %s%s\n", dim, row, code, reset)
+            printf(w, "  %d   %s%s\n", row, code, reset)
         }
     }
 }
 
-// stack 获取调用栈中第一个由于用户代码触发的帧
-func stack(skip int) *source {
+// stacks 获取调用栈中前几个由于用户代码触发的帧
+func stacks(skip int) []*source {
+    var sources []*source
     for i := skip; i < 32; i++ { // 最多往上找 32 层
         pc, file, line, ok := runtime.Caller(i)
         if !ok {
             break
         }
 
+        // 统一使用 / 作为分隔符，确保在 Windows 下也能正确过滤
+        file = filepath.ToSlash(file)
+
         // 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码。
         if !strings.Contains(file, "runtime/") &&
             !strings.Contains(file, "github.com/gin-gonic/gin") &&
-            !strings.Contains(file, "github.com/baagod/sgin") &&
             !strings.Contains(file, "sgin/recovery.go") /* 过滤自己 */ {
-            return &source{
-                file:     file,
-                line:     line,
-                funcName: runtime.FuncForPC(pc).Name(),
+
+            funcName := runtime.FuncForPC(pc).Name()
+            if index := strings.LastIndex(funcName, "."); index != -1 {
+                funcName = funcName[index+1:]
+            }
+
+            // 找到 4 层就够了
+            sources = append(sources, &source{file: file, line: line, funcName: funcName})
+            if len(sources) >= 4 {
+                break
             }
         }
     }
 
-    return &source{}
+    return sources
+}
+
+// shortenPath 缩短文件路径
+func shortenPath(file string) string {
+    if file == "" {
+        return ""
+    }
+
+    path := filepath.ToSlash(file)
+
+    // 1. 第三方库：检测 /pkg/mod/
+    if i := strings.Index(path, "/pkg/mod/"); i != -1 {
+        path = path[i+len("/pkg/mod/"):]
+        // 去除版本号 (e.g., @v1.2.3)
+        // path/gin@v1.9.1/context.go -> path/gin/context.go
+        if j := strings.Index(path, "@"); j != -1 {
+            if index := strings.Index(path[j:], "/"); index != -1 {
+                path = path[:j] + path[j+index:]
+            }
+        }
+        return path
+    }
+
+    // 2. 标准库：检测 GOROOT
+    // os.Getenv: 获取 Go 语言的安装目录 (如 c:/go)
+    if godir := os.Getenv("GOROOT"); godir != "" {
+        // Rel: 计算从 "c:/go/src" 到 "c:/go/src/path/../file.go" 的相对路径
+        rel, err := filepath.Rel(filepath.Join(godir, "src"), file)
+        if err == nil && !strings.HasPrefix(rel, "..") {
+            return filepath.ToSlash(rel)
+        }
+    }
+
+    // 3. 项目文件：相对于项目根目录
+    if wd, err := os.Getwd(); err == nil {
+        rel, err := filepath.Rel(wd, file)
+        if err == nil && !strings.HasPrefix(rel, "..") {
+            return filepath.ToSlash(rel)
+        }
+    }
+
+    return path
+}
+
+// printf 输出辅助函数
+func printf(w io.Writer, format string, a ...any) {
+    _, _ = fmt.Fprintf(w, format, a...)
 }
