@@ -2,7 +2,6 @@ package main
 
 import (
     "fmt"
-    "os"
     "time"
 
     "github.com/baagod/sgin"
@@ -42,11 +41,11 @@ func main() {
     r := sgin.New(sgin.Config{
         Mode:    gin.DebugMode,       // 调试模式
         OpenAPI: oa.New(oa.Config{}), // 开启 OpenAPI 文档服务
-        Recovery: func(c *sgin.Ctx, out, plain string) {
-            fmt.Print(out)
-            f, _ := os.OpenFile("log.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-            defer f.Close()
-            _, _ = f.WriteString(plain)
+        Recovery: func(c *sgin.Ctx, out, s string) {
+            // fmt.Print(out)
+            // f, _ := os.OpenFile("log.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+            // defer f.Close()
+            // _, _ = f.WriteString(s)
         },
     })
 

@@ -45,9 +45,9 @@ func main() {
 
 - `func(*gin.Context)` 兼容 gin
 - `func(*sgin.Ctx) error`
-- `func(*sgin.Ctx) (data any, err error)`
-- `func(*sgin.Ctx, input Struct) (data any, err error)`
-- `func(*sgin.Ctx, input Struct) (data any)`
+- `func(*sgin.Ctx) (any, error)`
+- `func(*sgin.Ctx, input Struct) (any, error)`
+- `func(*sgin.Ctx, input Struct) (any)`
 
 #### 请求参数绑定
 
@@ -131,6 +131,33 @@ r.POST("/login", func(op *oa.Operation) {
 ```
 
 启动后访问 `/openapi.yaml` 查看生成的规范。
+
+### 4. 强力 Panic 恢复与日志
+
+`sgin` 内置了一个增强的 Recovery 中间件，相比原生 gin，它提供了更强大的调试能力：
+
+- **多级调用栈追溯**：自动定位业务代码中的错误位置，跳过框架和标准库的干扰。
+- **源码上下文展示**：在控制台直接打印报错行及其前后的源代码片段，并高亮显示。
+- **路径自动简化**：智能缩短文件路径（如简化 `GOROOT`、`GOPATH` 或项目根目录路径）。
+- **双流输出**：同时提供美观的控制台日志和结构化的 JSON 日志，方便接入日志系统。
+
+**配置示例：**
+
+```go
+r := sgin.New(sgin.Config{
+    // Panic 恢复回调
+    Recovery: func(c *sgin.Ctx, logStr, jsonStr string) {
+        // 1. 控制台打印美观的彩色日志 (推荐开发环境)
+        fmt.Print(logStr)
+        
+        // 2. 将结构化 JSON 日志写入文件 (推荐生产环境)
+        // 包含时间、请求信息、完整堆栈和源码上下文
+        f, _ := os.OpenFile("panic.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+        defer f.Close()
+        f.WriteString(jsonStr + "\n")
+    },
+})
+```
 
 ## 配置
 
