@@ -67,7 +67,7 @@ func (r *RecoverInfo) String() string {
     for i, s := range r.Sources {
         format := "%sFile:%s %s:%d %s%s()%s\n"
         printf(sb, format, cyan, reset, s.File, s.Line, magenta, s.Func, reset)
-        printf(sb, s.colorSource)
+        sb.WriteString(s.colorSource)
 
         if i < len(r.Sources)-1 {
             sb.WriteString("\n")

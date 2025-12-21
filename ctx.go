@@ -14,11 +14,15 @@ import (
     "github.com/clbanning/mxj/v2"
     "github.com/rs/xid"
     "github.com/spf13/cast"
+    "golang.org/x/text/language"
 
     "github.com/gin-gonic/gin"
 )
 
-const CtxKey = "_baa/sgin/ctxkey"
+const (
+    CtxKey    = "_baa/sgin/ctx"
+    localeKey = "_baa/sgin/locale"
+)
 
 const (
     FormatXML      = "XML"
@@ -324,4 +328,17 @@ func (c *Ctx) autoFormat(body any, format ...string) {
         // 其他类型（包括 struct, map, []byte, int 等），默认为 JSON
         gc.JSON(status, body)
     }
+}
+
+// ------ 本地化支持 ------
+
+// Locale 获取当前请求的语言设置
+func (c *Ctx) Locale() language.Tag {
+    locale, _ := c.Get(localeKey).(language.Tag)
+    return locale
+}
+
+// SetLocale 设置当前请求的语言
+func (c *Ctx) SetLocale(locale language.Tag) {
+    c.ctx.Set(localeKey, locale)
 }

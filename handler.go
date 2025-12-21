@@ -4,14 +4,13 @@ import (
     "errors"
     "fmt"
     "reflect"
-    "strings"
 
     "github.com/gin-gonic/gin"
     "github.com/gin-gonic/gin/binding"
     "github.com/go-playground/validator/v10"
 )
 
-type Handler any // gin.HandlerFunc | func(*sgin.Ctx[, Input]) T | (T, error)
+type Handler any // gin.HandlerFunc, func(*sgin.Ctx[, Input]) T | (T, error)
 
 // handler 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
 func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
@@ -27,8 +26,8 @@ func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
         }
 
         // 2. 智能反射适配器
-        hValue := reflect.ValueOf(f)
-        hType := hValue.Type()
+        h := reflect.ValueOf(f)
+        hType := h.Type()
 
         // --- 启动时自检 (Fail Fast) ---
         if hType.Kind() != reflect.Func {
@@ -67,7 +66,7 @@ func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
 
             // 如果有请求参数，执行智能绑定
             if numIn == 2 {
-                val, err := bindV2(gc, reqType)
+                val, err := bindV2(ctx, reqType)
                 if err != nil { // 绑定失败，统一处理错误
                     gc.Abort()
                     _ = engine.cfg.ErrorHandler(ctx, ErrBadRequest(err.Error()))
@@ -77,7 +76,7 @@ func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
             }
 
             // 反射调用业务逻辑
-            results := hValue.Call(args)
+            results := h.Call(args)
 
             // 结果归一化并发送
             res := convertToResult(results)
@@ -89,7 +88,9 @@ func handler(engine *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
 }
 
 // bindV2 实现了 V2 架构的智能复合绑定
-func bindV2(c *gin.Context, t reflect.Type) (_ reflect.Value, err error) {
+func bindV2(c *Ctx, t reflect.Type) (_ reflect.Value, err error) {
+    gc := c.ctx
+
     // 确保我们操作的是具体类型（非指针）来创建实例，但绑定时可能需要指针
     isPtr := t.Kind() == reflect.Ptr
     if isPtr {
@@ -101,9 +102,9 @@ func bindV2(c *gin.Context, t reflect.Type) (_ reflect.Value, err error) {
     ptr := valPtr.Interface()
 
     // 绑定 URI, Header, Query 和 Body 参数，忽略效验错误。
-    if err = tryBind(c.ShouldBindUri, ptr); err == nil {
-        if err = tryBind(c.ShouldBindHeader, ptr); err == nil {
-            err = tryBind(c.ShouldBind, ptr)
+    if err = tryBind(gc.ShouldBindUri, ptr); err == nil {
+        if err = tryBind(gc.ShouldBindHeader, ptr); err == nil {
+            err = tryBind(gc.ShouldBind, ptr)
         }
     }
 
@@ -115,39 +116,14 @@ func bindV2(c *gin.Context, t reflect.Type) (_ reflect.Value, err error) {
     // 这是为了捕获之前被 tryBind 忽略的校验错误（如果最终还是缺字段）。
     if err = binding.Validator.ValidateStruct(ptr); err != nil {
         var errs validator.ValidationErrors
-        if errors.As(err, &errs) {
-            // 获取第一个校验错误
-            // 使用 StructNamespace (如 "UserReq.Info.Age") 获取字段的层级路径
-            parts := strings.Split(errs[0].StructNamespace(), ".")
-
-            currentTyp := t
-            var field reflect.StructField
-            found := true
-
-            // 遍历路径以找到对应的 StructField
-            // parts[0] 是结构体本身的名称，从 parts[1] 开始遍历字段
-            for i := 1; i < len(parts); i++ {
-                f, ok := currentTyp.FieldByName(parts[i])
-                if !ok {
-                    found = false
-                    break
-                }
-                // 如果是嵌套指针或结构体，更新 currentTyp 以便继续查找下一层
-                if field = f; f.Type.Kind() == reflect.Ptr {
-                    currentTyp = f.Type.Elem()
-                } else {
-                    currentTyp = f.Type
-                }
-            }
-
-            // 如果找到了字段，且配置了 failtip，则使用自定义错误提示
-            if found {
-                if failtip := field.Tag.Get("failtip"); failtip != "" {
-                    return reflect.Value{}, fmt.Errorf(failtip)
+        if errors.As(err, &errs) && len(errs) > 0 {
+            if translator := c.engine.translator; translator != nil {
+                locale := c.Locale().String() // 获取当前请求的语言
+                if trans, found := translator.GetTranslator(locale); found {
+                    err = errors.New(errs[0].Translate(trans)) // 翻译首个校验错误
                 }
             }
         }
-
         return
     }
 

@@ -1,6 +1,6 @@
 # sgin
 
-这是一个 [gin](https://github.com/gin-gonic/gin) 的封装版本，旨在提供更加智能、简洁的 API 开发体验。它通过增强的 Handler 签名、统一的参数绑定和自动化的 OpenAPI 文档生成，让开发者专注于业务逻辑。
+这是一个 [gin](https://github.com/gin-gonic/gin) 的封装版本，旨在提供更加智能、简洁的 API 开发体验。它通过增强的 Handler 签名、统一的参数绑定、自动化的 OpenAPI 文档生成和多语言校验错误支持，让开发者专注于业务逻辑。
 
 ## 安装
 
@@ -56,7 +56,7 @@ func main() {
 ```go
 type UserReq struct {
     ID    int    `uri:"id" binding:"required"`
-    Name  string `form:"name" binding:"required" failtip:"姓名不能为空"`
+	Name  string `form:"name" binding:"required" label:"姓名"`
     Age   int    `form:"age" default:"18"`
     Token string `header:"Authorization"`
 }
@@ -130,7 +130,7 @@ r.POST("/login", func(op *oa.Operation) {
 })
 ```
 
-启动后访问 `/openapi.yaml` 查看生成的规范。
+ 启动后访问 `/openapi.yaml` 查看生成的规范。
 
 ### 4. 强力 Panic 恢复与日志
 
@@ -158,6 +158,98 @@ r := sgin.New(sgin.Config{
     },
 })
 ```
+
+### 5. 多语言校验错误支持
+
+`sgin` 提供了完整的校验错误多语言本地化支持，基于 `validator/v10` 标准库和 `universal-translator`，支持智能语言匹配和可靠回退机制。
+
+#### 启用多语言支持
+
+在配置中指定需要支持的翻译器：
+
+```go
+import (
+    "github.com/baagod/sgin"
+    "github.com/go-playground/locales/zh"
+    tzh "github.com/go-playground/validator/v10/translations/zh"
+)
+
+r := sgin.New(sgin.Config{
+    Locales: []sgin.Locale{
+        // 第一个语言为默认语言
+        {New: zh.New(), Register: tzh.RegisterDefaultTranslations},
+        // 可配置多种语言
+        // {New: en.New(), Register: uten.RegisterDefaultTranslations},
+    },
+})
+```
+
+#### 字段标签与错误消息
+
+使用 `label` 标签为字段指定用户友好的名称，校验错误时会自动使用：
+
+```go
+type LoginReq struct {
+    Username string `json:"username" label:"用户名" binding:"required,min=3"`
+    Password string `json:"password" label:"密码" binding:"required,min=6"`
+}
+```
+
+**三层回退逻辑**：当校验失败时，错误消息中的字段名按以下顺序确定：
+1. **`label` 标签**：用户友好的字段名（推荐）
+2. **`json` 标签**：API 字段名
+3. **结构体字段名**：最后的回退
+
+#### 语言检测与匹配
+
+`sgin` 支持多种语言检测方式，优先级如下：
+
+1. **查询参数**：`?lang=zh-CN`
+2. **Accept-Language 头**：支持权重解析（如 `Accept-Language: zh-CN,zh;q=0.9,en;q=0.8`）
+3. **默认语言**：配置的第一个语言
+
+**智能匹配机制**：
+- 使用 Go 标准库 `golang.org/x/text/language` 进行语言匹配
+- 支持语言变体智能匹配（如 `zh-CN` ↔ `zh`）
+- 匹配失败时自动回退到默认语言，确保总有翻译可用
+
+#### 使用示例
+
+```go
+// 配置中文翻译器
+r := sgin.New(sgin.Config{
+    Locales: []sgin.Locale{
+        {New: zh.New(), Register: utzh.RegisterDefaultTranslations},
+    },
+})
+
+// 注册路由
+r.POST("/login", func(c *sgin.Ctx, req LoginReq) error {
+    // 业务逻辑...
+    return nil
+})
+```
+
+**客户端请求示例**：
+```bash
+# 使用查询参数指定语言
+POST /login?lang=zh-CN
+
+# 使用 Accept-Language 头
+POST /login
+Accept-Language: zh-CN
+
+# 无语言信息时，使用默认语言（中文）
+POST /login
+```
+
+校验失败时将返回对应语言的错误消息，如中文错误："用户名不能为空"。
+
+#### 设计原则
+
+- **零魔法原则**：不配置 `Locales` = 无翻译，返回原始英文错误
+- **用户显式配置**：用户需显式配置所有需要的语言版本
+- **契约明确**：翻译器注册键与运行时查找键精确匹配，无隐藏行为
 
 ## 配置
 
