@@ -326,93 +326,93 @@ r := sgin.New(sgin.Config{
 
 #### **控制台彩色输出**
 
-    ```bash
-    PANIC RECOVERED 
-    Time:         2025-12-22 14:30:25
-    Request:      GET /api/deep-panic
-    Host:         localhost:8080
-    Content-Type: application/json
-    IP:           127.0.0.1
-    TraceID:      c8h3q9b6t0v2m5x7
-    Error:        runtime error: invalid memory address or nil pointer dereference
+ ```bash
+ PANIC RECOVERED 
+ Time:         2025-12-22 14:30:25
+ Request:      GET /api/deep-panic
+ Host:         localhost:8080
+ Content-Type: application/json
+ IP:           127.0.0.1
+ TraceID:      c8h3q9b6t0v2m5x7
+ Error:        runtime error: invalid memory address or nil pointer dereference
 
-     File: example/main.go:72 LoadUserProfile()
-       69   func LoadUserProfile(userID string) (*UserProfile, error) {
-       70       user := &UserProfile{Name: "测试用户", Profile: nil}
-       71       // 加载用户详细信息
-       72 >     profileName := user.Profile.Name // panic 发生在这里
-       73       _ = profileName                  // 避免编译警告
-       74       return user, nil
-       75   }
-       
-     File: example/main.go:80 GetUserProfile()
-       77   // GetUserProfile 业务层函数
-       78   func GetUserProfile(userID string) (*UserProfile, error) {
-       79       // 调用模型层获取用户信息
-       80 >     return LoadUserProfile(userID)
-       81   }
-       82   
-       83   // HandleAPI API 层处理函数
-       
-     File: example/main.go:86 HandleAPI()
-       83   // HandleAPI API 层处理函数
-       84   func HandleAPI(c *sgin.Ctx) {
-       85       userID := c.Param("id")
-       86 >     profile, err := GetUserProfile(userID)
-       87       if err != nil {
-       88           c.Send(err)
-       89           return
-       
-     File: reflect/value.go:586 call()
-       583   }
-       584   
-       585   // Call.
-       586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)
-       587   
-       588   // For testing; see TestCallMethodJump.
-       589   if callGC {
-    ```
+  File: example/main.go:72 LoadUserProfile()
+    69   func LoadUserProfile(userID string) (*UserProfile, error) {
+    70       user := &UserProfile{Name: "测试用户", Profile: nil}
+    71       // 加载用户详细信息
+    72 >     profileName := user.Profile.Name // panic 发生在这里
+    73       _ = profileName                  // 避免编译警告
+    74       return user, nil
+    75   }
+    
+  File: example/main.go:80 GetUserProfile()
+    77   // GetUserProfile 业务层函数
+    78   func GetUserProfile(userID string) (*UserProfile, error) {
+    79       // 调用模型层获取用户信息
+    80 >     return LoadUserProfile(userID)
+    81   }
+    82   
+    83   // HandleAPI API 层处理函数
+    
+  File: example/main.go:86 HandleAPI()
+    83   // HandleAPI API 层处理函数
+    84   func HandleAPI(c *sgin.Ctx) {
+    85       userID := c.Param("id")
+    86 >     profile, err := GetUserProfile(userID)
+    87       if err != nil {
+    88           c.Send(err)
+    89           return
+    
+  File: reflect/value.go:586 call()
+    583   }
+    584   
+    585   // Call.
+    586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)
+    587   
+    588   // For testing; see TestCallMethodJump.
+    589   if callGC {
+ ```
 
 #### **结构化 JSON 输出**
 
-   ```json
-   {
-     "time": "2025-12-22 03:39:58",
-     "method": "GET",
-     "host": "localhost:8080",
-     "path": "/api/users/123",
-     "content": "",
-     "ip": "::1",
-     "traceid": "d544q3mn8dn4rk0e6h10",
-     "error": "runtime error: invalid memory address or nil pointer dereference",
-     "stack": [
-       {
-         "file": "example/main.go",
-         "line": 74,
-         "func": "LoadUserProfile",
-         "source": "71   func LoadUserProfile(userID string) (*UserProfile, error) {\n72       user := &UserProfile{Name: \"测试用户\", Profile: nil}\n73       // 加载用户详细信息\n74 >     profileName := user.Profile.Name // panic 发生在这里\n75       _ = profileName                  // 避免编译警告\n76       return user, nil\n77   }\n"
-       },
-       {
-         "file": "example/main.go",
-         "line": 82,
-         "func": "GetUserProfile",
-         "source": "79   // GetUserProfile 业务层函数\n80   func GetUserProfile(userID string) (*UserProfile, error) {\n81       // 调用模型层获取用户信息\n82 >     return LoadUserProfile(userID)\n83   }\n84   \n85   // HandleAPI API 层处理函数\n"
-       },
-       {
-         "file": "example/main.go",
-         "line": 88,
-         "func": "HandleAPI",
-         "source": "85   // HandleAPI API 层处理函数\n86   func HandleAPI(c *sgin.Ctx) {\n87       userID := c.Param(\"id\")\n88 >     profile, err := GetUserProfile(userID)\n89       if err != nil {\n90           c.Send(err)\n91           return\n"
-       },
-       {
-         "file": "reflect/value.go",
-         "line": 586,
-         "func": "call",
-         "source": "583   }\n584   \n585   // Call.\n586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)\n587   \n588   // For testing; see TestCallMethodJump.\n589   if callGC {\n"
-       }
-     ]
-   }
-   ```
+```json
+{
+  "time": "2025-12-22 03:39:58",
+  "method": "GET",
+  "host": "localhost:8080",
+  "path": "/api/users/123",
+  "content": "",
+  "ip": "::1",
+  "traceid": "d544q3mn8dn4rk0e6h10",
+  "error": "runtime error: invalid memory address or nil pointer dereference",
+  "stack": [
+    {
+      "file": "example/main.go",
+      "line": 74,
+      "func": "LoadUserProfile",
+      "source": "71   func LoadUserProfile(userID string) (*UserProfile, error) {\n72       user := &UserProfile{Name: \"测试用户\", Profile: nil}\n73       // 加载用户详细信息\n74 >     profileName := user.Profile.Name // panic 发生在这里\n75       _ = profileName                  // 避免编译警告\n76       return user, nil\n77   }\n"
+    },
+    {
+      "file": "example/main.go",
+      "line": 82,
+      "func": "GetUserProfile",
+      "source": "79   // GetUserProfile 业务层函数\n80   func GetUserProfile(userID string) (*UserProfile, error) {\n81       // 调用模型层获取用户信息\n82 >     return LoadUserProfile(userID)\n83   }\n84   \n85   // HandleAPI API 层处理函数\n"
+    },
+    {
+      "file": "example/main.go",
+      "line": 88,
+      "func": "HandleAPI",
+      "source": "85   // HandleAPI API 层处理函数\n86   func HandleAPI(c *sgin.Ctx) {\n87       userID := c.Param(\"id\")\n88 >     profile, err := GetUserProfile(userID)\n89       if err != nil {\n90           c.Send(err)\n91           return\n"
+    },
+    {
+      "file": "reflect/value.go",
+      "line": 586,
+      "func": "call",
+      "source": "583   }\n584   \n585   // Call.\n586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)\n587   \n588   // For testing; see TestCallMethodJump.\n589   if callGC {\n"
+    }
+  ]
+}
+```
 
 ### 多语言配置
 
