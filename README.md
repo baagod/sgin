@@ -324,34 +324,45 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-**功能特性**：
-- **多级调用栈追溯**：自动定位业务代码中的错误位置，跳过框架和标准库的干扰。
-- **源码上下文展示**：在控制台直接打印报错行及其前后的源代码片段，并高亮显示。
-- **路径自动简化**：智能缩短文件路径（如简化 `GOROOT`、`GOPATH` 或项目根目录路径）。
-- **双流输出**：同时提供美观的控制台日志和结构化的 JSON 日志，方便接入日志系统。
+#### **控制台彩色输出**
 
-**使用场景**：
-- **开发环境**：使用彩色控制台输出，快速定位错误位置
-- **生产环境**：将结构化 JSON 日志写入文件或发送到日志收集系统
-- **调试复杂错误**：源码上下文展示功能帮助理解错误的调用链
+   ```
+   PANIC RECOVERED 
+   Time:         2025-12-22 14:30:25
+   Request:      GET /api/users/123
+   Host:         localhost:8080
+   Content-Type: application/json
+   IP:           127.0.0.1
+   TraceID:      c8h3q9b6t0v2m5x7
+   Error:        runtime error: invalid memory address or nil pointer dereference
+   File: handlers/user.go:42 GetUserProfile()
+     42 >     profile := user.Profile.Name // panic 发生在这里
+     43        return profile, nil
+     44      }
+   ```
 
-**最佳实践**：
-```go
-// 生产环境配置示例
-r := sgin.New(sgin.Config{
-    Recovery: func(c *sgin.Ctx, logStr, jsonStr string) {
-        // 开发环境：输出彩色日志到控制台
-        if os.Getenv("ENV") == "development" {
-            fmt.Print(logStr)
-        }
-        
-        // 生产环境：记录结构化日志
-        logEntry := map[string]any{}
-        json.Unmarshal([]byte(jsonStr), &logEntry)
-        log.Error("panic recovered", "details", logEntry)
-    },
-})
-```
+#### **结构化 JSON 输出**
+
+   ```json
+   {
+     "time": "2025-12-22 14:30:25",
+     "method": "GET",
+     "host": "localhost:8080",
+     "path": "/api/users/123",
+     "content": "application/json",
+     "ip": "127.0.0.1",
+     "traceid": "c8h3q9b6t0v2m5x7",
+     "error": "runtime error: invalid memory address or nil pointer dereference",
+     "stack": [
+       {
+         "file": "handlers/user.go",
+         "line": 42,
+         "func": "GetUserProfile",
+         "source": "42 >     profile := user.Profile.Name // panic 发生在这里\n43        return profile, nil\n44      }"
+       }
+     ]
+   }
+   ```
 
 ### 多语言配置
 
