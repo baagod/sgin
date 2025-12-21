@@ -326,7 +326,7 @@ r := sgin.New(sgin.Config{
 
 #### **控制台彩色输出**
 
-    ```
+    ```bash
     PANIC RECOVERED 
     Time:         2025-12-22 14:30:25
     Request:      GET /api/deep-panic
