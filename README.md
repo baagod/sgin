@@ -91,12 +91,10 @@ c.Send(err)                     // Error
 
 `sgin` 统一处理来自不同来源的参数（Query、Form、JSON Body、XML、Multipart），并提供类型安全的访问方法。
 
-**核心方法**：
-
 - `Values() map[string]any`: 获取所有请求参数的键值对（Body 覆盖 Query）
 - `Value(string, ...string) string`: 获取字符串参数，支持默认值
 - `ValueAny(string, ...any) any`: 获取原始类型的参数值
-- `ValueInt(string, ...int), ValueBool, ...`: 统一获取查询或请求体参数
+- `ValueInt(string, ...int), ValueBool, ...`: 获取查询或请求体参数
 - `ValueFile(string) (*multipart.FileHeader, error)`: 获取上传的文件
 - `SaveFile(*multipart.FileHeader, string) error`: 保存上传的文件到指定路径
 
@@ -127,7 +125,7 @@ c.Send(err)                     // Error
 
 #### 上下文存储与中间件
 
-- `Get(key string, value ...any) any`: 获取或设置上下文值，不会发生 panic。
+- `Get(key string, value ...any) any`: 获取或设置上下文值，不会发生 `panic`。
 - `Next() error`: 执行下一个中间件或处理器
 
 #### Cookie 操作
@@ -262,8 +260,9 @@ r := sgin.New(sgin.Config{
 
 ### OpenAPI 配置
 
-启用 OpenAPI 文档生成功能：
+`sgin` 可以通过分析 Handler 的输入输出结构体，自动生成 OpenAPI 3.1 文档。启用后，框架会自动生成规范文件和交互式文档页面。
 
+**启用方法**：
 ```go
 import "github.com/baagod/sgin/oa"
 
@@ -278,43 +277,6 @@ r := sgin.New(sgin.Config{
     }),
 })
 ```
-
-### Panic 恢复配置
-
-`sgin` 内置了一个增强的 Recovery 中间件，相比原生 gin，它提供了更强大的调试能力：
-
-```go
-r := sgin.New(sgin.Config{
-    // Panic 恢复回调
-    Recovery: func(c *sgin.Ctx, logStr, jsonStr string) {
-        // 1. 控制台打印美观的彩色日志 (推荐开发环境)
-        fmt.Print(logStr)
-        
-        // 2. 将结构化 JSON 日志写入文件 (推荐生产环境)
-        // 包含时间、请求信息、完整堆栈和源码上下文
-        f, _ := os.OpenFile("panic.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-        defer f.Close()
-        f.WriteString(jsonStr + "\n")
-    },
-})
-```
-
-**功能特性**：
-- **多级调用栈追溯**：自动定位业务代码中的错误位置，跳过框架和标准库的干扰。
-- **源码上下文展示**：在控制台直接打印报错行及其前后的源代码片段，并高亮显示。
-- **路径自动简化**：智能缩短文件路径（如简化 `GOROOT`、`GOPATH` 或项目根目录路径）。
-- **双流输出**：同时提供美观的控制台日志和结构化的 JSON 日志，方便接入日志系统。
-
-## 增强特性
-
-在了解核心功能和配置之后，以下是 `sgin` 提供的增强特性，可以帮助你构建更加强大、易维护的API。
-
-### OpenAPI 文档生成与使用
-
-`sgin` 可以通过分析 Handler 的输入输出结构体，自动生成 OpenAPI 3.1 文档。
-
-**启用方法**：
-在 `sgin.Config` 中配置 `OpenAPI` 字段（见 OpenAPI 配置）。
 
 **文档自定义**：
 在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
@@ -342,16 +304,38 @@ r.POST("/login", func(op *oa.Operation) {
 - `/openapi.yaml` - OpenAPI 规范文件
 - `/docs` - 交互式API文档页面
 
-### Panic 恢复与调试
+### Panic 恢复配置
 
-`sgin` 的 Panic 恢复功能在 Panic 恢复配置 章节已配置。以下是具体使用场景和最佳实践：
+`sgin` 内置了一个增强的 Recovery 中间件，相比原生 gin，它提供了更强大的调试能力：
 
-#### 使用场景
+```go
+r := sgin.New(sgin.Config{
+    // Panic 恢复回调
+    Recovery: func(c *sgin.Ctx, logStr, jsonStr string) {
+        // 1. 控制台打印美观的彩色日志 (推荐开发环境)
+        fmt.Print(logStr)
+        
+        // 2. 将结构化 JSON 日志写入文件 (推荐生产环境)
+        // 包含时间、请求信息、完整堆栈和源码上下文
+        f, _ := os.OpenFile("panic.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+        defer f.Close()
+        f.WriteString(jsonStr + "\n")
+    },
+})
+```
+
+**功能特性**：
+- **多级调用栈追溯**：自动定位业务代码中的错误位置，跳过框架和标准库的干扰。
+- **源码上下文展示**：在控制台直接打印报错行及其前后的源代码片段，并高亮显示。
+- **路径自动简化**：智能缩短文件路径（如简化 `GOROOT`、`GOPATH` 或项目根目录路径）。
+- **双流输出**：同时提供美观的控制台日志和结构化的 JSON 日志，方便接入日志系统。
+
+**使用场景**：
 - **开发环境**：使用彩色控制台输出，快速定位错误位置
 - **生产环境**：将结构化 JSON 日志写入文件或发送到日志收集系统
 - **调试复杂错误**：源码上下文展示功能帮助理解错误的调用链
 
-#### 最佳实践
+**最佳实践**：
 ```go
 // 生产环境配置示例
 r := sgin.New(sgin.Config{
@@ -369,13 +353,11 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-### 多语言支持
+### 多语言配置
 
 `sgin` 提供完整的校验错误多语言本地化支持。配置 `Locales` 字段后，校验错误消息将自动根据客户端语言偏好返回对应语言的错误信息。
 
-#### 配置与使用
-
-**1. 基础配置**：
+**基础配置**：
 ```go
 import (
     "github.com/baagod/sgin"
@@ -392,7 +374,7 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-**2. 字段标签**：使用 `label` 标签为字段指定用户友好的名称。
+**字段标签**：使用 `label` 标签为字段指定用户友好的名称。
 ```go
 type LoginReq struct {
     Username string `json:"username" label:"用户名" binding:"required,min=3"`
@@ -400,12 +382,12 @@ type LoginReq struct {
 }
 ```
 
-**3. 语言检测优先级**：
+**语言检测优先级**：
 1. 查询参数 `?lang=zh-CN`
 2. `Accept-Language` 请求头（支持权重）
 3. 配置的第一个语言（默认）
 
-**4. 完整示例**：
+**完整示例**：
 ```go
 r.POST("/login", func(c *sgin.Ctx, req LoginReq) error {
     // 业务逻辑...
@@ -418,8 +400,7 @@ r.POST("/login", func(c *sgin.Ctx, req LoginReq) error {
 // 校验失败返回对应语言错误，如："用户名不能为空"
 ```
 
-#### 支持的语言
-
+**支持的语言**：
 `sgin` 目前支持以下语言：
 - 🇨🇳 中文 (Chinese, SimplifiedChinese)
 - 🇺🇸 英文 (English)
