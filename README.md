@@ -335,10 +335,30 @@ r := sgin.New(sgin.Config{
    IP:           127.0.0.1
    TraceID:      c8h3q9b6t0v2m5x7
    Error:        runtime error: invalid memory address or nil pointer dereference
-   File: handlers/user.go:42 GetUserProfile()
-     42 >     profile := user.Profile.Name // panic 发生在这里
-     43        return profile, nil
-     44      }
+   
+   File: models/user.go:45 LoadUserProfile()
+     44        // 加载用户详细信息
+     45 >     profile := user.Profile.Name // panic 发生在这里
+     46        return &profile, nil
+     47      }
+   
+   File: handlers/user.go:78 GetUserProfile()
+     77        // 调用模型层获取用户信息
+     78        profile, err := models.LoadUserProfile(userID)
+     79        if err != nil {
+     80            return nil, err
+     81        }
+   
+   File: handlers/api.go:32 HandleAPI()
+     31        // 处理用户API请求
+     32        profile := GetUserProfile(userID)
+     33        return c.JSON(profile)
+     34      }
+   
+   File: main.go:15 main()
+     14        // 启动HTTP服务器
+     15        r := sgin.New()
+     16        r.GET("/api/users/:id", HandleAPI)
    ```
 
 #### **结构化 JSON 输出**
@@ -355,10 +375,28 @@ r := sgin.New(sgin.Config{
      "error": "runtime error: invalid memory address or nil pointer dereference",
      "stack": [
        {
+         "file": "models/user.go",
+         "line": 45,
+         "func": "LoadUserProfile",
+         "source": "44        // 加载用户详细信息\n45 >     profile := user.Profile.Name // panic 发生在这里\n46        return &profile, nil\n47      }"
+       },
+       {
          "file": "handlers/user.go",
-         "line": 42,
+         "line": 78,
          "func": "GetUserProfile",
-         "source": "42 >     profile := user.Profile.Name // panic 发生在这里\n43        return profile, nil\n44      }"
+         "source": "77        // 调用模型层获取用户信息\n78        profile, err := models.LoadUserProfile(userID)\n79        if err != nil {\n80            return nil, err\n81        }"
+       },
+       {
+         "file": "handlers/api.go",
+         "line": 32,
+         "func": "HandleAPI",
+         "source": "31        // 处理用户API请求\n32        profile := GetUserProfile(userID)\n33        return c.JSON(profile)\n34      }"
+       },
+       {
+         "file": "main.go",
+         "line": 15,
+         "func": "main",
+         "source": "14        // 启动HTTP服务器\n15        r := sgin.New()\n16        r.GET(\"/api/users/:id\", HandleAPI)"
        }
      ]
    }
