@@ -10,16 +10,10 @@ import (
     "github.com/baagod/sgin/oa"
     "github.com/gin-gonic/gin"
     "github.com/gin-gonic/gin/binding"
-    "github.com/go-playground/locales"
     ut "github.com/go-playground/universal-translator"
     "github.com/go-playground/validator/v10"
     "golang.org/x/text/language"
 )
-
-type Locale struct {
-    New      locales.Translator
-    Register func(*validator.Validate, ut.Translator) error
-}
 
 type Engine struct {
     Router
@@ -38,7 +32,7 @@ type Config struct {
     // 回调 [纯文本] 和 [JSON] 日志，返回 true 输出默认日志到控制台。
     Logger  func(c *Ctx, text string, s string) bool
     OpenAPI *oa.OpenAPI
-    Locales []Locale // 校验器翻译配置列表，第一个为默认语言。
+    Locales []language.Tag // 绑定验证错误所使用的多语言支持
 }
 
 // DefaultErrorHandler 默认的错误处理器
@@ -161,12 +155,12 @@ func (e *Engine) useTranslator() {
     }
 
     validate.RegisterTagNameFunc(func(f reflect.StructField) string {
-        // 1. 优先使用 label 标签 (用户友好的字段名)
+        // 优先使用 label 标签 (用户友好的字段名)
         if label, found := f.Tag.Lookup("label"); found && label != "-" {
             return label
         }
 
-        // 2. 依次检查其他标签
+        // 依次检查其他标签
         for _, tag := range []string{"json", "form", "header", "uri"} {
             if label := f.Tag.Get(tag); label != "" && label != "-" {
                 return strings.Split(label, ",")[0] // "" => f.Name
@@ -176,35 +170,9 @@ func (e *Engine) useTranslator() {
         return f.Name
     })
 
-    var tags []language.Tag
-
-    for _, x := range e.cfg.Locales { // 注册所有配置的语言翻译
-        locale := x.New.Locale()
-        tag, err := language.Parse(locale)
-        if err != nil {
-            debugWarning("failed to parse language locale '%s': %v", locale, err)
-            continue
-        }
-
-        if tags = append(tags, tag); e.translator == nil {
-            e.translator = ut.New(x.New)
-        }
-        _ = e.translator.AddTranslator(x.New, true)
-
-        trans, found := e.translator.GetTranslator(locale)
-        if found {
-            if err = x.Register(validate, trans); err != nil {
-                debugWarning("failed to register [%s] translator: %v", locale, err)
-                continue
-            }
-            if e.defaultLang == language.Und {
-                e.defaultLang = tag
-            }
-        }
-    }
-
+    // 使用 Locales 配置
+    e.defaultLang, e.languageMatcher, e.translator = localeComponents(validate, e.cfg.Locales...)
     if e.defaultLang != language.Und {
         e.Use(localeMiddleware)
-        e.languageMatcher = language.NewMatcher(tags)
     }
 }

@@ -1,7 +1,6 @@
 .idea
 .playwright-mcp
 /huma
-/AGENTS.md
 /evolution.md
 /COMMIT_MSG.md
 *.exe

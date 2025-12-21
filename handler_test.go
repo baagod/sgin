@@ -1,16 +1,12 @@
 package sgin
 
 import (
-    "errors"
     "net/http"
     "net/http/httptest"
     "strings"
     "testing"
 
-    "github.com/go-playground/locales/zh"
-    "github.com/go-playground/universal-translator"
-    "github.com/go-playground/validator/v10"
-    tzh "github.com/go-playground/validator/v10/translations/zh"
+    "golang.org/x/text/language"
 )
 
 type LoginReq struct {
@@ -20,9 +16,7 @@ type LoginReq struct {
 
 func TestLocalizedValidation(t *testing.T) {
     r := New(Config{
-        Locales: []Locale{
-            {New: zh.New(), Register: tzh.RegisterDefaultTranslations},
-        },
+        Locales: []language.Tag{language.Chinese},
     })
 
     r.POST("/login", func(c *Ctx, req LoginReq) error {
@@ -125,28 +119,41 @@ func TestLocalizedValidation(t *testing.T) {
     assertContainsEnglishKeyword(t, w.Body.String())
 }
 
-func TestLocaleRegistrationFailure(t *testing.T) {
-    // 模拟一个返回错误的 Register 函数
-    failingRegister := func(*validator.Validate, ut.Translator) error {
-        return errors.New("simulated registration failure")
-    }
-
-    // 创建一个翻译器，但注册函数会失败
-    zhTranslator := zh.New()
-
-    // 创建引擎，包含一个会失败的翻译器和一个成功的翻译器（如果有的话）
-    // 但这里我们只配置一个会失败的翻译器，预期结果是没有任何翻译器被注册
+func TestSimplifiedLanguageConfig(t *testing.T) {
+    // 测试简化配置：使用 Locales 字段
     r := New(Config{
-        Locales: []Locale{
-            {New: zhTranslator, Register: failingRegister},
-        },
+        Locales: []language.Tag{language.Chinese, language.English},
     })
 
     r.POST("/login", func(c *Ctx, req LoginReq) error {
         return nil
     })
 
-    // 由于翻译器注册失败，应该没有翻译器可用，错误信息应为英文
+    // 辅助函数：检查响应体是否包含中文关键词
+    assertContainsChineseKeyword := func(t *testing.T, body string) {
+        t.Helper()
+        expectedPatterns := []string{"用户名", "不能为空", "必填字段"}
+        for _, pattern := range expectedPatterns {
+            if strings.Contains(body, pattern) {
+                return // 找到任意关键词即通过
+            }
+        }
+        t.Errorf("期望错误信息包含中文关键词，得到 %q", body)
+    }
+
+    // 辅助函数：检查响应体是否包含英文关键词
+    assertContainsEnglishKeyword := func(t *testing.T, body string) {
+        t.Helper()
+        expectedPatterns := []string{"username", "required", "field"}
+        for _, pattern := range expectedPatterns {
+            if strings.Contains(strings.ToLower(body), strings.ToLower(pattern)) {
+                return // 找到任意关键词即通过
+            }
+        }
+        t.Errorf("期望错误信息包含英文关键词，得到 %q", body)
+    }
+
+    // 测试中文错误（使用 zh-CN）
     w := httptest.NewRecorder()
     req, _ := http.NewRequest("POST", "/login", strings.NewReader(`{}`))
     req.Header.Set("Accept-Language", "zh-CN")
@@ -154,17 +161,35 @@ func TestLocaleRegistrationFailure(t *testing.T) {
     if w.Code != http.StatusBadRequest {
         t.Errorf("期望状态码 %d, 得到 %d", http.StatusBadRequest, w.Code)
     }
-    // 检查是否为英文错误
-    expectedPatterns := []string{"username", "required", "field"}
-    found := false
-    bodyLower := strings.ToLower(w.Body.String())
-    for _, pattern := range expectedPatterns {
-        if strings.Contains(bodyLower, pattern) {
-            found = true
-            break
-        }
+    assertContainsChineseKeyword(t, w.Body.String())
+
+    // 测试英文错误（使用 en-US）
+    w = httptest.NewRecorder()
+    req, _ = http.NewRequest("POST", "/login", strings.NewReader(`{}`))
+    req.Header.Set("Accept-Language", "en-US")
+    r.engine.ServeHTTP(w, req)
+    if w.Code != http.StatusBadRequest {
+        t.Errorf("期望状态码 %d, 得到 %d", http.StatusBadRequest, w.Code)
     }
-    if !found {
-        t.Errorf("期望错误信息包含英文关键词，得到 %q", w.Body.String())
+    assertContainsEnglishKeyword(t, w.Body.String())
+
+    // 测试语言变体（zh-TW 应回退到 zh）
+    w = httptest.NewRecorder()
+    req, _ = http.NewRequest("POST", "/login", strings.NewReader(`{}`))
+    req.Header.Set("Accept-Language", "zh-TW")
+    r.engine.ServeHTTP(w, req)
+    if w.Code != http.StatusBadRequest {
+        t.Errorf("期望状态码 %d, 得到 %d", http.StatusBadRequest, w.Code)
     }
+    assertContainsChineseKeyword(t, w.Body.String())
+
+    // 测试未配置的语言（fr-FR 应回退到默认语言中文）
+    w = httptest.NewRecorder()
+    req, _ = http.NewRequest("POST", "/login", strings.NewReader(`{}`))
+    req.Header.Set("Accept-Language", "fr-FR")
+    r.engine.ServeHTTP(w, req)
+    if w.Code != http.StatusBadRequest {
+        t.Errorf("期望状态码 %d, 得到 %d", http.StatusBadRequest, w.Code)
+    }
+    assertContainsChineseKeyword(t, w.Body.String())
 }
