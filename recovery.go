@@ -81,7 +81,7 @@ func (r *RecoverInfo) JSON() string {
 	var sb strings.Builder
 	enc := json.NewEncoder(&sb)
 	enc.SetEscapeHTML(false) // 关键：禁止 HTML 转义
-	// enc.SetIndent("", "    ")
+	enc.SetIndent("", "    ")
 	_ = enc.Encode(r)
 	return sb.String()
 }
@@ -204,6 +204,7 @@ func stack(skip int) (sources []*Stack) {
 		// 过滤掉 Go Runtime 和 Gin 内部的代码，只找业务代码。
 		if !strings.Contains(file, "runtime/") &&
 			!strings.Contains(file, "github.com/gin-gonic/gin") &&
+			!strings.Contains(file, "github.com/baagod/sgin") &&
 			!strings.Contains(file, "sgin/recovery.go") /* 过滤自己 */ {
 
 			funcName := runtime.FuncForPC(pc).Name()
