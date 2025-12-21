@@ -36,19 +36,20 @@ func main() {
 
 `sgin` 的核心价值在于提供更加智能、简洁的 API 开发体验。以下是你需要了解的核心功能：
 
-### 3.1 智能 Handler 签名
+### 智能 Handler 签名
 
 `sgin` 支持多种灵活的 Handler 签名，自动处理参数绑定和响应发送。
 
 **支持的签名示例：**
 
-- `func(*gin.Context)` 兼容 gin
+- `func(*gin.Context)`: 兼容 gin
 - `func(*sgin.Ctx) error`
 - `func(*sgin.Ctx) (any, error)`
 - `func(*sgin.Ctx, input Struct) (any, error)`
 - `func(*sgin.Ctx, input Struct) (any)`
+- `func(*sgin.Ctx, input *Struct)`: 指针结构体也支持
 
-### 3.2 请求参数绑定
+### 请求参数绑定
 
 只需在 Handler 的第二个参数定义结构体，`sgin` 会自动将 **URI**、**Header**、**Query**、**Form** 和 **Body (JSON/XML)** 的数据绑定到该结构体上。
 
@@ -60,47 +61,166 @@ type UserReq struct {
     Token string `header:"Authorization"`
 }
 
-r.POST("/users/:id", func(c *sgin.Ctx, req UserReq) (map[string]any, error) {
+r.POST("/users/:id", func(c *sgin.Ctx, p UserReq) (map[string]any, error) {
     // req 已自动绑定并校验通过
-    return map[string]any{
-        "id":   req.ID,
-        "name": req.Name,
-        "age":  req.Age,
-    }, nil
+    return map[string]any{"id": p.ID, "name": p.Name, "age": p.Age}, nil
 })
 ```
 
-### 3.3 统一响应处理
+### 统一响应处理
 
 Handler 的返回值会被自动处理：
-- **`error`**: 自动调用配置的 `ErrorHandler`。
-- **`data`**: 自动根据请求头 `Accept` 格式化为 JSON, XML 或 Text。
+
+- `error`: 自动调用配置的 `ErrorHandler`。
+- `data`: 自动根据请求头 `Accept` 格式化为 JSON, XML 或 Text。
 
 你也可以使用 `c.Send()` 手动发送：
 
 ```go
 c.Send("Hello")                 // Text
 c.Send(User{}, sgin.FormatJSON) // JSON
-c.Send(User{}, sgin.FormatXML)  // 或者手动指定格式
+c.Send(User{}, sgin.FormatXML)  // 手动指定格式
 c.Send(err)                     // Error
 ```
 
-### 3.4 增强的 Context (`sgin.Ctx`)
+### 增强的 Context (`sgin.Ctx`)
 
-`sgin.Ctx` 封装了 `gin.Context`，提供了更便捷的方法：
+`sgin.Ctx` 封装了 `gin.Context`，提供了更便捷、类型安全的 API。以下是所有可用方法的完整指南：
 
-- **参数获取**: `Values()` 方法统一获取所有来源的参数（Query, Form, JSON Body 等）。
-- **类型转换**: `ValueInt("age")`, `ValueBool("is_admin")` 等。
-- **文件处理**: `ValueFile("file")` 获取上传文件。
-- **响应控制**: `Status(200)`, `SetHeader("Key", "Val")`。
-- **TraceID**: 自动生成或传递 `X-Request-ID`。
-- **Gin**: 返回 `*gin.Context`。
+#### 参数获取与类型转换
+
+`sgin` 统一处理来自不同来源的参数（Query、Form、JSON Body、XML、Multipart），并提供类型安全的访问方法。
+
+**核心方法**：
+
+- `Values() map[string]any`: 获取所有请求参数的键值对（Body 覆盖 Query）
+- `Value(string, ...string) string`: 获取字符串参数，支持默认值
+- `ValueAny(string, ...any) any`: 获取原始类型的参数值
+- `ValueInt(string, ...int), ValueBool, ...`: 统一获取查询或请求体参数
+- `ValueFile(string) (*multipart.FileHeader, error)`: 获取上传的文件
+- `SaveFile(*multipart.FileHeader, string) error`: 保存上传的文件到指定路径
+
+#### 请求信息与元数据
+
+- `Method() string`: 获取 HTTP 方法（GET、POST 等）
+- `IP() string`: 获取客户端 IP 地址
+- `Path(full ...bool) string`: 获取请求路径（`full=true` 返回路由定义路径）
+- `Param(key string) string`: 获取路径参数（如 `/users/:id` 中的 `id`）
+- `GetHeader(key string, value ...string) string`: 获取请求头，支持默认值
+- `RawBody() []byte`: 获取原始请求体（支持多次读取）
+- `StatusCode() int`: 获取当前响应状态码
+
+#### 响应控制
+
+- `Send(body any, format ...string) error`: 发送响应，自动根据 Accept 头协商格式
+- `SendHTML(name string, data any) error`: 发送 HTML 响应
+- `Status(code int) *Ctx`: 设置响应状态码（链式调用）
+- `Header(key string, value string) *Ctx`: 设置响应头（链式调用）
+- `Content(value string) *Ctx`: 设置 Content-Type 头（链式调用）
+
+**响应格式常量**：
+- `sgin.FormatJSON` - 强制返回 JSON 格式
+- `sgin.FormatXML` - 强制返回 XML 格式
+- `sgin.FormatText` - 强制返回纯文本格式
+- `sgin.FormatUpload` - 文件上传
+- `sgin.FormatDownload` - 文件下载
+
+#### 上下文存储与中间件
+
+- `Get(key string, value ...any) any`: 获取或设置上下文值，不会发生 panic。
+- `Next() error`: 执行下一个中间件或处理器
+
+#### Cookie 操作
+
+- `Cookie(name string) (string, error)`: 获取 Cookie 值
+- `SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool)`: 设置 Cookie
+
+#### 追踪与调试
+
+- `TraceID() string`: 获取当前请求的跟踪 ID（自动生成或从 `X-Request-ID` 头读取）
+- `Gin() *gin.Context`: 返回底层的 `*gin.Context`（用于访问原生 gin 功能）
+
+#### 多语言支持
+
+- `Locale() language.Tag`: 获取当前请求的语言设置
+- `SetLocale(locale language.Tag)`: 手动设置请求语言（覆盖自动检测）
+
+#### 使用示例
 
 ```go
 func(c *sgin.Ctx) {
-    id := c.ValueInt("id", 0) // 获取参数，默认值为 0
-    ip := c.IP()
-    traceID := c.TraceID()
+    // 参数获取与类型转换
+    id := c.ValueInt("id")          // 获取整数参数，默认值为 0
+    name := c.Value("name", "匿名")  // 获取字符串参数，默认值为 "匿名"
+    isAdmin := c.ValueBool("admin") // 获取布尔值参数
+    
+    // 请求信息
+    method := c.Method()    // "GET", "POST" 等
+    clientIP := c.IP()      // 客户端 IP
+    traceID := c.TraceID()  // 请求跟踪 ID
+    
+    // 响应控制
+    c.Header("X-Custom-Header", "value")
+    c.Status(200).Send(map[string]any{
+        "id": id,
+        "name": name,
+        "trace_id": traceID,
+    })
+    
+    // 文件上传处理
+    if file, err := c.ValueFile("avatar"); err == nil {
+        c.SaveFile(file, "./uploads/avatar.jpg")
+    }
+    
+    // 多语言支持
+    locale := c.Locale()
+    fmt.Printf("当前请求语言: %v\n", locale)
+}
+```
+
+### Engine API
+
+`sgin.Engine` 是框架的核心入口，它封装了 `gin.Engine` 并提供了更简洁、一致的 API 设计。以下是 `Engine` 的主要方法：
+
+#### 核心方法
+
+- `New(config ...sgin.Config) *sgin.Engine`: 创建新的 `sgin` 实例，支持可选配置
+- `Run(addr string, certfile ...string) error`: 启动 HTTP(S) 服务器，通过可选参数支持 HTTPS
+- `RunListener(listener net.Listener) error`: 通过指定的监听器启动服务器
+- `Gin() *gin.Engine`: 获取底层的 `gin.Engine` 实例（用于访问原生功能）
+
+#### 使用示例
+
+```go
+package main
+
+import (
+    "github.com/baagod/sgin"
+    "net"
+)
+
+func main() {
+    // 1. 极简初始化
+    app := sgin.New()
+    
+    // 2. 链式路由定义（继承自 Router）
+    app.GET("/", func(c *sgin.Ctx) string {
+        return "Hello sgin!"
+    })
+    
+    // 3. 启动 HTTP 服务
+    go app.Run(":8080")
+    
+    // 4. 启动 HTTPS 服务（通过可选参数）
+    go app.Run(":8443", "cert.pem", "cert.key")
+    
+    // 5. 通过监听器启动（灵活部署）
+    listener, _ := net.Listen("tcp", ":9090")
+    app.RunListener(listener)
+    
+    // 6. 访问底层 gin（逃生舱模式）
+    ginEngine := app.Gin()
+    ginEngine.Static("/static", "./assets")
 }
 ```
 
@@ -108,7 +228,7 @@ func(c *sgin.Ctx) {
 
 `sgin` 提供了灵活的配置选项，所有配置都在 `sgin.Config` 结构体中设置。以下是所有可用配置的详细说明：
 
-### 4.1 基础配置
+### 基础配置
 
 ```go
 r := sgin.New(sgin.Config{
@@ -140,44 +260,7 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-### 4.2 多语言配置
-
-`sgin` 提供了完整的校验错误多语言本地化支持，基于 `validator/v10` 和 `universal-translator`。
-
-```go
-import (
-    "github.com/baagod/sgin"
-    "golang.org/x/text/language"
-)
-
-r := sgin.New(sgin.Config{
-    Locales: []language.Tag{
-        // 第一个语言为默认语言
-        language.Chinese,          // 中文
-        // 可配置多种语言
-        language.English,          // 英文
-        language.Japanese,         // 日文
-        language.Korean,           // 韩文
-        language.French,           // 法文
-        language.Russian,          // 俄文
-        language.German,           // 德文
-        language.Spanish,          // 西班牙文
-    },
-})
-```
-
-**三层回退逻辑**：当校验失败时，错误消息中的字段名按以下顺序确定：
-1. **`label` 标签**：用户友好的字段名（推荐）
-2. **`json` 标签**：API 字段名
-3. **结构体字段名**：最后的回退
-
-**设计原则**：
-- **零魔法原则**：不配置 `Locales` = 无翻译，返回原始英文错误
-- **显式配置**：用户只需提供标准库语言标签，框架自动创建对应翻译器
-- **类型安全**：使用 `language.Tag` 而非字符串，编译时检查语言标签有效性
-- **自动映射**：框架内部处理翻译器注册和语言匹配，用户无需关心底层细节
-
-### 4.3 OpenAPI 配置
+### OpenAPI 配置
 
 启用 OpenAPI 文档生成功能：
 
@@ -196,7 +279,7 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-### 4.4 Panic 恢复配置
+### Panic 恢复配置
 
 `sgin` 内置了一个增强的 Recovery 中间件，相比原生 gin，它提供了更强大的调试能力：
 
@@ -226,12 +309,12 @@ r := sgin.New(sgin.Config{
 
 在了解核心功能和配置之后，以下是 `sgin` 提供的增强特性，可以帮助你构建更加强大、易维护的API。
 
-### 5.1 OpenAPI 文档生成与使用
+### OpenAPI 文档生成与使用
 
 `sgin` 可以通过分析 Handler 的输入输出结构体，自动生成 OpenAPI 3.1 文档。
 
 **启用方法**：
-在 `sgin.Config` 中配置 `OpenAPI` 字段（见 4.3 OpenAPI 配置）。
+在 `sgin.Config` 中配置 `OpenAPI` 字段（见 OpenAPI 配置）。
 
 **文档自定义**：
 在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
@@ -259,9 +342,9 @@ r.POST("/login", func(op *oa.Operation) {
 - `/openapi.yaml` - OpenAPI 规范文件
 - `/docs` - 交互式API文档页面
 
-### 5.2 Panic 恢复与调试
+### Panic 恢复与调试
 
-`sgin` 的 Panic 恢复功能在 4.4 章节已配置。以下是具体使用场景和最佳实践：
+`sgin` 的 Panic 恢复功能在 Panic 恢复配置 章节已配置。以下是具体使用场景和最佳实践：
 
 #### 使用场景
 - **开发环境**：使用彩色控制台输出，快速定位错误位置
@@ -286,84 +369,56 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-### 5.3 多语言校验错误详细使用
+### 多语言支持
 
-#### 字段标签与错误消息
+`sgin` 提供完整的校验错误多语言本地化支持。配置 `Locales` 字段后，校验错误消息将自动根据客户端语言偏好返回对应语言的错误信息。
 
-使用 `label` 标签为字段指定用户友好的名称，校验错误时会自动使用：
+#### 配置与使用
 
+**1. 基础配置**：
+```go
+import (
+    "github.com/baagod/sgin"
+    "golang.org/x/text/language"
+)
+
+r := sgin.New(sgin.Config{
+    Locales: []language.Tag{
+        language.Chinese,  // 默认语言（第一个）
+        language.English,  // 备用语言
+        // 可选：language.Japanese, language.Korean, language.French, 
+        // language.Russian, language.German, language.Spanish
+    },
+})
+```
+
+**2. 字段标签**：使用 `label` 标签为字段指定用户友好的名称。
 ```go
 type LoginReq struct {
     Username string `json:"username" label:"用户名" binding:"required,min=3"`
     Password string `json:"password" label:"密码" binding:"required,min=6"`
-    Email    string `json:"email" label:"邮箱" binding:"required,email"`
 }
 ```
 
-#### 语言检测与匹配
+**3. 语言检测优先级**：
+1. 查询参数 `?lang=zh-CN`
+2. `Accept-Language` 请求头（支持权重）
+3. 配置的第一个语言（默认）
 
-`sgin` 支持多种语言检测方式，优先级如下：
-
-1. **查询参数**：`?lang=zh-CN`
-2. **Accept-Language 头**：支持权重解析（如 `Accept-Language: zh-CN,zh;q=0.9,en;q=0.8`）
-3. **默认语言**：配置的第一个语言
-
-**智能匹配机制**：
-- 使用 Go 标准库 `golang.org/x/text/language` 进行语言匹配
-- 支持语言变体智能匹配（如 `zh-CN` ↔ `zh`）
-- 匹配失败时自动回退到默认语言，确保总有翻译可用
-
-#### 使用示例
-
+**4. 完整示例**：
 ```go
-import "golang.org/x/text/language"
-
-// 配置支持的语言
-r := sgin.New(sgin.Config{
-    Locales: []language.Tag{
-        language.Chinese,  // 默认语言
-        language.English,  // 备用语言
-    },
-})
-
-// 注册路由
 r.POST("/login", func(c *sgin.Ctx, req LoginReq) error {
     // 业务逻辑...
     return nil
 })
+
+// 客户端请求示例：
+// POST /login?lang=zh-CN
+// POST /login (携带 Accept-Language: zh-CN 头)
+// 校验失败返回对应语言错误，如："用户名不能为空"
 ```
 
-**客户端请求示例**：
-```bash
-# 使用查询参数指定语言
-POST /login?lang=zh-CN
-
-# 使用 Accept-Language 头
-POST /login
-Accept-Language: zh-CN
-
-# 无语言信息时，使用默认语言（中文）
-POST /login
-```
-
-校验失败时将返回对应语言的错误消息，如中文错误："用户名不能为空"。
-
-#### 语言检测中间件
-
-`sgin` 自动注册语言检测中间件（当配置了 `Locales` 时），你可以在业务代码中获取当前语言：
-
-```go
-func(c *sgin.Ctx) {
-    // 获取当前请求的语言设置
-    locale := c.Locale()
-    fmt.Printf("当前语言: %v\n", locale)
-    
-    // 手动设置语言（覆盖自动检测）
-    c.SetLocale(language.English)
-}
-```
-
-#### 支持的语言列表
+#### 支持的语言
 
 `sgin` 目前支持以下语言：
 - 🇨🇳 中文 (Chinese, SimplifiedChinese)
