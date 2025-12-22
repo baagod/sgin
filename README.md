@@ -44,7 +44,7 @@ go get github.com/baagod/sgin
 ```go
 type User struct {
     ID    int    `uri:"id" binding:"required"`
-	Name  string `form:"name" binding:"required" label:"姓名"`
+	Name  string `form:"name" binding:"required" doc:"姓名"`
     Age   int    `form:"age" default:"18"`
     Token string `header:"Authorization"`
 }
@@ -64,15 +64,16 @@ r.POST("/users/:id", func(c *sgin.Ctx, p User) (map[string]any, error) {
 你也可以使用 `c.Send()` 发送指定数据：
 
 ```go
-c.Send("Hello") // Text
+c.Send("Hello") // 返回文本消息
 c.Send(User{})  // 根据请求头 `Accept` 返回对应格式的数据
-c.Send(sgin.BodyXML(User{}))  // 手动指定格式
-c.Send(err)                   // Error
+c.Send(sgin.BodyXML(User{}))       // 手动指定格式
+c.Send(sgin.ErrBadRequest("bad"))  // 返回指定的错误状态和可选消息
+c.Header(sgin.HeaderAcceptLanguage).Send("zh-cn") // 设置请求头并发送数据
 ```
 
 ### 增强的 `sgin.Ctx`
 
-`sgin.Ctx` 封装了 `gin.Context`，提供更便捷 API。以下是所有可用方法的完整指南：
+`sgin.Ctx` 封装了 `gin.Context`，提供更便捷 API，以下是所有可用方法的完整指南。
 
 #### 参数获取
 
@@ -98,10 +99,10 @@ c.Send(err)                   // Error
 
 #### 响应控制
 
-- `Send(body any, format ...string) error`: 发送响应，自动根据 Accept 头协商格式
-- `Status(code int) *Ctx`: 设置响应状态码（链式调用）
-- `Header(key string, value string) *Ctx`: 设置响应头（链式调用）
-- `Content(value string) *Ctx`: 设置 Content-Type 头（链式调用）
+- `Send(body any, format ...string) error`: 发送响应，自动根据 `Accept` 头协商格式。
+- `Status(code int) *Ctx`: 设置响应状态码
+- `Header(key string, value string) *Ctx`: 设置响应头
+- `Content(value string) *Ctx`: 设置 `Content-Type` 头
 
 **支持的响应体格式：**
 
@@ -139,25 +140,24 @@ c.Send(err)                   // Error
 #### 使用示例
 
 ```go
-// 1. 极简初始化
 app := sgin.New()
 
-// 2. 链式路由定义（继承自 Router）
+// 链式路由定义（继承自 Router）
 app.GET("/", func(c *sgin.Ctx) string {
   return "Hello sgin!"
 })
 
-// 3. 启动 HTTP 服务
+// 启动 HTTP 服务
 go app.Run(":8080")
 
-// 4. 启动 HTTPS 服务
+// 启动 HTTPS 服务
 go app.Run(":8443", "cert.pem", "cert.key")
 
-// 5. 通过监听器启动（灵活部署）
+// 通过监听器启动
 listener, _ := net.Listen("tcp", ":9090")
 app.RunListener(listener)
 
-// 6. 访问底层 gin（逃生舱模式）
+// 访问底层 gin
 ginEngine := app.Gin()
 ginEngine.Static("/static", "./assets")
 ```
@@ -170,15 +170,14 @@ ginEngine.Static("/static", "./assets")
 
 ```go
 r := sgin.New(sgin.Config{
-    // 运行模式 (可选: gin.DebugMode, gin.ReleaseMode, gin.TestMode)
+    // 运行模式，可选: gin.DebugMode, gin.ReleaseMode, gin.TestMode。
     Mode: gin.ReleaseMode,
     
-    // 受信任的代理IP列表，用于获取真实客户端IP
+    // 受信任的代理IP列表，用于获取真实客户端IP。
     TrustedProxies: []string{"192.168.1.0/24"},
     
     // 自定义错误处理器
     ErrorHandler: func(c *sgin.Ctx, err error) error {
-        // 可以根据错误类型返回不同的状态码和消息
         return c.Status(500).Send(map[string]any{
             "error": err.Error(),
             "code":  500,
@@ -188,12 +187,10 @@ r := sgin.New(sgin.Config{
     // 自定义日志处理器
     // text: 控制台友好格式，json: 结构化JSON格式
     // 返回 true 继续输出默认日志，false 拦截日志输出
-    Logger: func(c *sgin.Ctx, text string, json string) bool {
-        // 开发环境输出彩色日志
-        fmt.Print(text)
-        // 生产环境可以记录JSON日志
-        // log.Info(json)
-        return false // 拦截默认日志输出
+    Logger: func(c *sgin.Ctx, out, stru string) bool {
+        fmt.Print(out) // 彩色日志
+        log.Info(stru) // JSON 日志
+        return false   // 拦截默认日志输出
     },
 })
 ```
@@ -219,13 +216,14 @@ r := sgin.New(sgin.Config{
 ```
 
 **文档自定义**：
+
 在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
 
 ```go
 import "github.com/baagod/sgin/oa"
 
 type LoginReq struct {
-    Username string `json:"username" doc:"用户名"`
+    Username string `json:"username" doc:"用户名"` // doc: OpenAPI 字段描述
     Password string `json:"password" doc:"密码"`
 }
 
@@ -241,25 +239,25 @@ r.POST("/login", func(op *oa.Operation) {
 ```
 
 启动后访问以下URL查看生成的文档：
+
 - `/openapi.yaml` - OpenAPI 规范文件
 - `/docs` - 交互式API文档页面
 
 ### Panic 恢复配置
 
-`sgin` 内置了一个增强的 Recovery 中间件，相比原生 gin，它提供了更强大的调试能力：
+`sgin` 内置了一个增强的 `Recovery` 中间件，它提供了更强大的调试能力：
 
 ```go
 r := sgin.New(sgin.Config{
-    // Panic 恢复回调
-    Recovery: func(c *sgin.Ctx, logStr, jsonStr string) {
+    Recovery: func(c *sgin.Ctx, out, stru string) {
         // 1. 控制台打印美观的彩色日志 (推荐开发环境)
-        fmt.Print(logStr)
+        fmt.Print(out)
         
         // 2. 将结构化 JSON 日志写入文件 (推荐生产环境)
         // 包含时间、请求信息、完整堆栈和源码上下文
         f, _ := os.OpenFile("panic.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
         defer f.Close()
-        f.WriteString(jsonStr + "\n")
+        f.WriteString(stru)
     },
 })
 ```
@@ -358,13 +356,9 @@ File: reflect/value.go:586 call()
 
 `sgin` 提供完整的校验错误多语言本地化支持。配置 `Locales` 字段后，校验错误消息将自动根据客户端语言偏好返回对应语言的错误信息。
 
-**基础配置**：
-```go
-import (
-    "github.com/baagod/sgin"
-    "golang.org/x/text/language"
-)
+**基础配置：**
 
+```go
 r := sgin.New(sgin.Config{
     Locales: []language.Tag{
         language.Chinese,  // 默认语言（第一个）
@@ -375,20 +369,23 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-**字段标签**：使用 `label` 标签为字段指定用户友好的名称。
+**字段标签**：使用 `doc` 标签为字段指定用户友好的名称。
+
 ```go
 type LoginReq struct {
-    Username string `json:"username" label:"用户名" binding:"required,min=3"`
-    Password string `json:"password" label:"密码" binding:"required,min=6"`
+    Username string `json:"username" doc:"用户名" binding:"required,min=3"`
+    Password string `json:"password" doc:"密码" binding:"required,min=6"`
 }
 ```
 
-**语言检测优先级**：
+**语言检测优先级：**
+
 1. 查询参数 `?lang=zh-CN`
 2. `Accept-Language` 请求头（支持权重）
 3. 配置的第一个语言（默认）
 
-**完整示例**：
+**完整示例：**
+
 ```go
 r.POST("/login", func(c *sgin.Ctx, req LoginReq) error {
     // 业务逻辑...

@@ -313,9 +313,7 @@ func (c *Ctx) autoFormat(body any) {
 			gc.HTML(status, f.name, f.data)
 		default:
 			err := fmt.Errorf("unsupported response body format: '%s'", f.format)
-			if c.engine != nil && c.engine.cfg.ErrorHandler != nil {
-				_ = c.engine.cfg.ErrorHandler(c, err)
-			}
+			_ = c.engine.cfg.ErrorHandler(c, err)
 		}
 
 		return

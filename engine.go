@@ -30,7 +30,7 @@ type Config struct {
 	Recovery       func(c *Ctx, out, s string) // 回调 [带颜色的输出] 和 [结构化日志]
 	ErrorHandler   func(c *Ctx, err error) error
 	// 回调 [纯文本] 和 [JSON] 日志，返回 true 输出默认日志到控制台。
-	Logger  func(c *Ctx, text string, s string) bool
+	Logger  func(c *Ctx, out string, s string) bool
 	OpenAPI *oa.OpenAPI
 	Locales []language.Tag // 绑定验证错误所使用的多语言支持
 }
@@ -155,8 +155,8 @@ func (e *Engine) useTranslator() {
 	}
 
 	validate.RegisterTagNameFunc(func(f reflect.StructField) string {
-		// 优先使用 label 标签 (用户友好的字段名)
-		if label, found := f.Tag.Lookup("label"); found && label != "-" {
+		// 优先使用 doc 标签
+		if label, found := f.Tag.Lookup("doc"); found && label != "-" {
 			return label
 		}
 
