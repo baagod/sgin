@@ -70,7 +70,7 @@ c.Send("Hello") // 返回文本消息
 c.Send(User{})  // 根据请求头 `Accept` 返回对应格式的数据
 c.Send(sgin.BodyXML(User{}))       // 手动指定格式
 c.Send(sgin.ErrBadRequest("bad"))  // 返回指定的错误状态和可选消息
-c.Header(sgin.HeaderAcceptLanguage).Send("zh-cn") // 设置请求头并发送数据
+c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发送数据
 ```
 
 ### 增强的 `sgin.Ctx`
@@ -101,7 +101,7 @@ c.Header(sgin.HeaderAcceptLanguage).Send("zh-cn") // 设置请求头并发送数
 
 #### 响应控制
 
-- `Send(body any, format ...string) error`: 发送响应，自动根据 `Accept` 头协商格式。
+- `Send(body any) error`: 发送响应，自动根据 `Accept` 头协商格式。
 - `Status(code int) *Ctx`: 设置响应状态码
 - `Header(key string, value string) *Ctx`: 设置响应头
 - `Content(value string) *Ctx`: 设置 `Content-Type` 头
@@ -162,10 +162,10 @@ r := sgin.New(sgin.Config{
     },
     
     // 自定义日志处理器
-    // text: 控制台友好格式，json: 结构化JSON格式
+    // out: 控制台友好格式，stru: 结构化JSON格式
     // 返回 true 继续输出默认日志，false 拦截日志输出
     Logger: func(c *sgin.Ctx, out, stru string) bool {
-        fmt.Print(out) // 彩色日志
+        fmt.Print(out) // 控制台日志
         log.Info(stru) // JSON 日志
         return false   // 拦截默认日志输出
     },

@@ -90,8 +90,11 @@ func (r *RecoverInfo) JSON() string {
 func Recovery(c *Ctx) {
 	gc := c.ctx
 	defer func() {
-		if r := recover(); r != nil {
-			err := r.(error)
+		if recovered := recover(); recovered != nil {
+			err, _ := recovered.(error)
+			if err == nil {
+				err = fmt.Errorf("%v", recovered)
+			}
 
 			// 检查连接是否断开 (broken pipe)
 			var brokenPipe bool
