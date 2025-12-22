@@ -163,31 +163,6 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 3. **检查项目状态**：执行 `git_status` 确认项目变更状态，如有疑问，则继续和用户交流。
 4. **执行最终提交**：执行 `git_add .`, `git commit -F COMMIT_MSG.md` 完成最终提交。
 
-## 项目技术指南
-
-### 构建与测试命令
-
-- **构建**: `go build ./...`
-- **测试全部**: `go test ./...`
-- **测试单个**: `go test -v -run TestName ./path/to/package`
-- **代码检查**: `go fmt ./... && go vet ./...`
-
-### 代码风格指南
-
-- **导入顺序**: 标准库 → 第三方库 → 组间空行分隔
-- **格式化**: 使用 `gofmt` 标准的 Tab 缩进
-- **命名约定**: PascalCase（导出），camelCase（内部），PascalCase（常量）
-- **错误处理**: 返回错误，使用 `errors.As/Is` 进行类型检查
-- **注释**: 文档和注释使用中文
-
-### 项目结构与 Git
-
-- **主包**: `github.com/baagod/sgin`
-- **子包**: `oa/`, `helper/`, `example/`
-- **测试**: `*_test.go` 文件与实现文件并列
-- **提交信息**: Conventional Commits 规范的中文提交（参考 COMMIT_MSG.md）
-- **提交前检查**: 提交前运行 `go test ./...`
-
 ## 通用备注
 
 1. 如果你无法直接执行 `终端命令`，请先指示用户执行。

@@ -12,24 +12,15 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/clbanning/mxj/v2"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/xid"
 	"github.com/spf13/cast"
 	"golang.org/x/text/language"
-
-	"github.com/gin-gonic/gin"
 )
 
 const (
 	CtxKey    = "_baa/sgin/ctx"
 	localeKey = "_baa/sgin/locale"
-)
-
-const (
-	FormatXML      = "XML"
-	FormatJSON     = "JSON"
-	FormatText     = "Text"
-	FormatUpload   = "Upload"
-	FormatDownload = "Download"
 )
 
 type Ctx struct {
@@ -41,7 +32,7 @@ type Ctx struct {
 	engine  *Engine
 	ctx     *gin.Context
 	cache   map[string]any // 缓存所有请求参数的键值
-	traceid string         // 请求的跟踪ID
+	traceid string         // 请求的 [跟踪ID]
 }
 
 func newCtx(ctx *gin.Context, e *Engine) *Ctx {
@@ -63,7 +54,7 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
 	return c
 }
 
-// ------ 参数解析 (Value/Query) ------
+// ------ 参数获取 ------
 
 // Values 获取所有参数 (Body 覆盖 Query)
 func (c *Ctx) Values() map[string]any {
@@ -153,73 +144,14 @@ func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
 	return c.ctx.SaveUploadedFile(file, dst)
 }
 
-// ------ 响应 ------
-
-func (c *Ctx) Send(body any, format ...string) error {
-	c.autoFormat(body, format...)
-	return nil
-}
-
-func (c *Ctx) SendHTML(name string, data any) error {
-	c.ctx.Abort()
-	c.ctx.HTML(c.StatusCode(), name, data)
-	return nil
-}
-
-func (c *Ctx) Next() error {
-	c.ctx.Next()
-	return nil
-}
-
-func (c *Ctx) Status(code int) *Ctx {
-	c.Writer.WriteHeader(code)
-	return c
-}
-
-// Get 设置或将值存储到上下文
-func (c *Ctx) Get(key string, value ...any) any {
-	if len(value) > 0 {
-		c.ctx.Set(key, value[0])
-		return value[0]
-	}
-	v, _ := c.ctx.Get(key)
-	return v
-}
+// ------ 请求信息 ------
 
 func (c *Ctx) Method() string {
 	return c.Request.Method
 }
 
-// GetHeader 获取 HTTP 请求头的值，如果不存在则返回可选的默认值。
-func (c *Ctx) GetHeader(key string, value ...string) string {
-	header := c.ctx.GetHeader(key)
-	if header == "" && len(value) > 0 {
-		return value[0]
-	}
-	return header
-}
-
-func (c *Ctx) Header(key string, value string) *Ctx {
-	c.ctx.Header(key, value)
-	return c
-}
-
-func (c *Ctx) Content(value string) *Ctx {
-	c.ctx.Header(HeaderContentType, value)
-	return c
-}
-
-func (c *Ctx) RawBody() (body []byte) {
-	if body, _ = c.Get(gin.BodyBytesKey).([]byte); body == nil {
-		if body, _ = io.ReadAll(c.Request.Body); body != nil {
-			c.Get(gin.BodyBytesKey, body)
-		}
-	}
-	return body
-}
-
-func (c *Ctx) StatusCode() int {
-	return c.ctx.Writer.Status()
+func (c *Ctx) IP() string {
+	return c.ctx.ClientIP()
 }
 
 // Path 返回请求路径
@@ -237,8 +169,26 @@ func (c *Ctx) Param(key string) string {
 	return c.Params.ByName(key)
 }
 
-func (c *Ctx) IP() string {
-	return c.ctx.ClientIP()
+// GetHeader 获取 HTTP 请求头的值，如果不存在则返回可选的默认值。
+func (c *Ctx) GetHeader(key string, value ...string) string {
+	header := c.ctx.GetHeader(key)
+	if header == "" && len(value) > 0 {
+		return value[0]
+	}
+	return header
+}
+
+func (c *Ctx) StatusCode() int {
+	return c.ctx.Writer.Status()
+}
+
+func (c *Ctx) RawBody() (body []byte) {
+	if body, _ = c.Get(gin.BodyBytesKey).([]byte); body == nil {
+		if body, _ = io.ReadAll(c.Request.Body); body != nil {
+			c.Get(gin.BodyBytesKey, body)
+		}
+	}
+	return body
 }
 
 func (c *Ctx) Cookie(name string) (string, error) {
@@ -249,7 +199,61 @@ func (c *Ctx) SetCookie(name, value string, maxAge int, path, domain string, sec
 	c.ctx.SetCookie(name, value, maxAge, path, domain, secure, httpOnly)
 }
 
-// TraceID 获取当前请求的 [跟踪ID]
+// ------ 响应控制 ------
+
+func (c *Ctx) Send(body any) error {
+	c.autoFormat(body)
+	return nil
+}
+
+func (c *Ctx) Status(code int) *Ctx {
+	c.Writer.WriteHeader(code)
+	return c
+}
+
+func (c *Ctx) Header(key string, value string) *Ctx {
+	c.ctx.Header(key, value)
+	return c
+}
+
+func (c *Ctx) Content(value string) *Ctx {
+	c.ctx.Header(HeaderContentType, value)
+	return c
+}
+
+// ------ 上下文存储与中间件 ------
+
+func (c *Ctx) Next() error {
+	c.ctx.Next()
+	return nil
+}
+
+// Get 设置或将值存储到上下文
+func (c *Ctx) Get(key string, value ...any) any {
+	if len(value) > 0 {
+		c.ctx.Set(key, value[0])
+		return value[0]
+	}
+	v, _ := c.ctx.Get(key)
+	return v
+}
+
+// ------ 本地化支持 ------
+
+// Locale 获取当前请求的语言设置
+func (c *Ctx) Locale() language.Tag {
+	locale, _ := c.Get(localeKey).(language.Tag)
+	return locale
+}
+
+// SetLocale 设置当前请求的语言
+func (c *Ctx) SetLocale(locale language.Tag) {
+	c.ctx.Set(localeKey, locale)
+}
+
+// ------ 追踪与调试 ------
+
+// TraceID 获取请求的 [跟踪ID]
 func (c *Ctx) TraceID() string {
 	return c.traceid
 }
@@ -258,6 +262,8 @@ func (c *Ctx) TraceID() string {
 func (c *Ctx) Gin() *gin.Context {
 	return c.ctx
 }
+
+// ------ 私有方法 ------
 
 // sendResult 消费内部归一化的响应结果
 func (c *Ctx) sendResult(r *result) {
@@ -279,7 +285,7 @@ func (c *Ctx) sendResult(r *result) {
 }
 
 // autoFormat 自动根据 Accept 头返回对应类型的数据
-func (c *Ctx) autoFormat(body any, format ...string) {
+func (c *Ctx) autoFormat(body any) {
 	gc := c.ctx
 	if gc.Abort(); body == nil { // 停止后续请求链的执行
 		return
@@ -288,22 +294,30 @@ func (c *Ctx) autoFormat(body any, format ...string) {
 	status := c.StatusCode() // HTTP 状态码
 
 	// 1. 如果指定格式
-	if len(format) > 0 {
-		switch format[0] {
-		case FormatJSON:
-			gc.JSON(status, body)
-		case FormatXML:
-			gc.XML(status, body)
-		case FormatText:
-			gc.String(status, fmt.Sprint(body))
-		case FormatUpload, FormatDownload:
-			file := fmt.Sprint(body)
-			if format[0] == FormatDownload {
+	if f, ok := body.(Body); ok && f.format != "" {
+		switch f.format {
+		case FmtJSON:
+			gc.JSON(status, f.data)
+		case FmtXML:
+			gc.XML(status, f.data)
+		case FmtText:
+			gc.String(status, fmt.Sprint(f.data))
+		case FmtUpload, FmtDownload:
+			file := fmt.Sprint(f.data)
+			if f.format == FmtDownload {
 				filename := filepath.Base(file)
 				c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
 			}
-			gc.File(file)
+			gc.File(file) // 将指定文件写入正体流
+		case FmtHTML: // 发送 HTML
+			gc.HTML(status, f.name, f.data)
+		default:
+			err := fmt.Errorf("unsupported response body format: '%s'", f.format)
+			if c.engine != nil && c.engine.cfg.ErrorHandler != nil {
+				_ = c.engine.cfg.ErrorHandler(c, err)
+			}
 		}
+
 		return
 	}
 
@@ -332,17 +346,4 @@ func (c *Ctx) autoFormat(body any, format ...string) {
 		// 其他类型（包括 struct, map, []byte, int 等），默认为 JSON
 		gc.JSON(status, body)
 	}
-}
-
-// ------ 本地化支持 ------
-
-// Locale 获取当前请求的语言设置
-func (c *Ctx) Locale() language.Tag {
-	locale, _ := c.Get(localeKey).(language.Tag)
-	return locale
-}
-
-// SetLocale 设置当前请求的语言
-func (c *Ctx) SetLocale(locale language.Tag) {
-	c.ctx.Set(localeKey, locale)
 }

@@ -36,7 +36,7 @@ func main() {
 		// 目前支持的语言：中文(zh)、英文(en)、日文(ja)、韩文(ko)、法文(fr)、俄文(ru)、德文(de)、西班牙文(es)
 		Locales: []language.Tag{language.Chinese, language.English},
 		Recovery: func(c *sgin.Ctx, out, s string) {
-			fmt.Println(s)
+			fmt.Println(out)
 		},
 	})
 
