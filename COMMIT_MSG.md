@@ -1,10 +1,7 @@
-refactor(openapi): 重构模块架构并简化Logger回调
+enhance(ctx): 扩展Get方法支持多级查找并更新示例
 
-- 重构 OpenAPI 模块：将配置和业务逻辑迁移到 Config 结构体，保持 OpenAPI 为纯净规范字段
-- 修改 Logger 回调签名：从返回 `bool` 改为无返回值，简化接口设计
-- 更新 `router` 和 `engine`：适应 `Config` 类型变更，确保注册功能正常工作
-- 优化文档和示例：更新 `README` 和示例代码，展示新 API 使用方式
-- 修复工具调用：修正 `AGENTS.md` 中的 git 命令引用
+- 增强`Get()`方法：支持两级查找（先 `gin.Get`，再 `gin.Value`），提升上下文值访问能力
+- 保持API兼容：`Get` 方法签名不变，增强功能而不破坏现有代码
 
-BREAKING CHANGE: `Logger` 回调函数签名变更，从`func(c *Ctx, out, s string) bool` 改为
-`func(c *Ctx, out, s string)`，现有实现需要移除返回值。
+此次修改使 `sgin.Ctx.Get()` 能够访问到通过 `gin.Context.Value()` 设置的值，
+同时示例代码展示了如何实现类型安全的参数绑定高阶函数。

@@ -1,37 +1,38 @@
 package main
 
 import (
-	"fmt"
+	"net/http"
 
-	"github.com/baagod/sgin"
-	"github.com/baagod/sgin/oa"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/text/language"
 )
 
-type User struct {
-	ID   int    `uri:"id" binding:"required"`
-	Name string `form:"name" binding:"required" doc:"姓名"`
-	Age  int    `form:"age" binding:"required,gt=18" doc:"年龄"`
+type LoginRequest struct {
+	Username string `form:"username" binding:"required"`
+	Password string `form:"password" binding:"required"`
 }
 
-type Response struct {
-	Token string `json:"authorization"`
+func BindHandler[Input any](handler func(c *gin.Context, input Input)) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 1. 创建输入结构体的实例
+		var input Input
+
+		// 2. 使用gin的绑定机制绑定数据
+		// 这里简化处理，实际可以根据标签绑定URI、Query、Body等
+		if err := c.ShouldBind(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// 3. 执行用户传入的 handler
+		handler(c, input)
+	}
 }
 
 func main() {
-	r := sgin.New(sgin.Config{
-		Mode:    gin.DebugMode,
-		Locales: []language.Tag{language.Chinese, language.Korean},
-		OpenAPI: oa.New(func(c *oa.Config) {}),
-		Recovery: func(c *sgin.Ctx, out, s string) {
-			fmt.Println(out)
-		},
-	})
+	g := gin.Default()
+	g.GET("/", BindHandler(func(c *gin.Context, input LoginRequest) {
 
-	r.GET("/users/:id", func(c *sgin.Ctx, p User) Response {
-		return Response{}
-	})
+	}))
 
-	_ = r.Run(":8080")
+	g.Run(":8080")
 }

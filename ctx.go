@@ -234,8 +234,12 @@ func (c *Ctx) Get(key string, value ...any) any {
 		c.ctx.Set(key, value[0])
 		return value[0]
 	}
-	v, _ := c.ctx.Get(key)
-	return v
+
+	if v, ok := c.ctx.Get(key); ok {
+		return v
+	}
+
+	return c.ctx.Value(key)
 }
 
 // ------ 追踪与调试 ------
