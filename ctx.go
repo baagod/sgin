@@ -262,8 +262,8 @@ func (c *Ctx) locale(tag ...language.Tag) language.Tag {
 	return lang
 }
 
-// sendResult 消费内部归一化的响应结果
-func (c *Ctx) sendResult(r *result) {
+// send 消费内部归一化的响应结果
+func (c *Ctx) send(r *result) {
 	// 1. 处理状态码 (如果有显式设置)
 	if r.Status > 0 {
 		c.Status(r.Status)

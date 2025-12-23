@@ -4,14 +4,10 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"reflect"
-	"strings"
 
 	"github.com/baagod/sgin/oa"
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	ut "github.com/go-playground/universal-translator"
-	"github.com/go-playground/validator/v10"
 	"golang.org/x/text/language"
 )
 
@@ -66,7 +62,9 @@ func New(config ...Config) *Engine {
 	}
 
 	e.Use(Recovery, Logger) // 注册 [恢复] 和 [日志] 中间件
-	e.useTranslator()       // 注册校验翻译器
+	if tr := useTranslator(e); tr != nil {
+		e.Use(tr) // 注册校验翻译器
+	}
 
 	// gin.engine 配置
 	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -109,32 +107,6 @@ func (e *Engine) Gin() *gin.Engine {
 	return e.engine
 }
 
-// localeMiddleware 语言检测中间件
-func localeMiddleware(c *Ctx) error {
-	// 1. 优先检查查询参数 ?lang=zh-CN
-	if lang := c.ctx.Query("lang"); lang != "" {
-		if tag, err := language.Parse(lang); err == nil {
-			c.locale(tag)
-			return c.Next()
-		}
-	}
-
-	// 2. 解析 Accept-Language 头（支持权重）
-	if lang := c.GetHeader(HeaderAcceptLanguage); lang != "" {
-		if tags, _, _ := language.ParseAcceptLanguage(lang); len(tags) > 0 {
-			// 如果有匹配器，使用匹配器选择最合适的语言
-			if matcher := c.engine.languageMatcher; matcher != nil {
-				tag, _, _ := matcher.Match(tags...)
-				c.locale(tag)
-				return c.Next()
-			}
-		}
-	}
-
-	c.locale(c.engine.defaultLang)
-	return c.Next()
-}
-
 func defaultConfig(config ...Config) (cfg Config) {
 	if len(config) > 0 {
 		cfg = config[0]
@@ -145,34 +117,4 @@ func defaultConfig(config ...Config) (cfg Config) {
 	}
 
 	return cfg
-}
-
-// useTranslator 使用绑定校验翻译器
-func (e *Engine) useTranslator() {
-	validate, ok := binding.Validator.Engine().(*validator.Validate)
-	if !ok {
-		panic("validator engine is not *validator.Validate")
-	}
-
-	validate.RegisterTagNameFunc(func(f reflect.StructField) string {
-		// 优先使用 doc 标签
-		if label, found := f.Tag.Lookup("doc"); found && label != "-" {
-			return label
-		}
-
-		// 依次检查其他标签
-		for _, tag := range []string{"json", "form", "header", "uri"} {
-			if label := f.Tag.Get(tag); label != "" && label != "-" {
-				return strings.Split(label, ",")[0] // "" => f.Name
-			}
-		}
-
-		return f.Name
-	})
-
-	// 使用 Locales 配置
-	e.defaultLang, e.languageMatcher, e.translator = localeComponents(validate, e.cfg.Locales...)
-	if e.defaultLang != language.Und {
-		e.Use(localeMiddleware)
-	}
 }

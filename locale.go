@@ -1,6 +1,10 @@
 package sgin
 
 import (
+	"reflect"
+	"strings"
+
+	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/locales/de"
 	"github.com/go-playground/locales/es"
 	"github.com/go-playground/locales/fr"
@@ -24,6 +28,8 @@ import (
 	tes "github.com/go-playground/validator/v10/translations/es" // 西班牙语
 	tzh "github.com/go-playground/validator/v10/translations/zh" // 中文
 )
+
+var validateTags = []string{"uri", "json", "form", "header"}
 
 // langMapping 存储语言标签到翻译器构造函数的映射
 var langMapping = map[language.Tag]struct {
@@ -50,15 +56,34 @@ func SupportedLanguages() []language.Tag {
 	return tags
 }
 
-// localeComponents 根据语言标签创建多语言核心组件
-func localeComponents(validate *validator.Validate, tags ...language.Tag) (
-	defaultLang language.Tag,
-	matcher language.Matcher,
-	translator *ut.UniversalTranslator,
-) {
-	if len(tags) == 0 || validate == nil {
+// useTranslator 根据语言标签创建多语言核心组件
+func useTranslator(e *Engine) (handler func(*Ctx) error) {
+	tags := e.cfg.Locales
+	if len(tags) == 0 {
 		return
 	}
+
+	validate, _ := binding.Validator.Engine().(*validator.Validate)
+	if validate == nil {
+		panic("validator engine is not *validator.Validate")
+	}
+
+	validate.RegisterTagNameFunc(func(f reflect.StructField) string {
+		// 优先使用 doc 标签
+		if label, found := f.Tag.Lookup("doc"); found && label != "-" {
+			return label
+		}
+
+		// 依次检查其他标签
+		for _, tag := range validateTags {
+			if label := f.Tag.Get(tag); label != "" && label != "-" {
+				return strings.Split(label, ",")[0] // "" => f.Name
+			}
+		}
+
+		return f.Name
+	})
+
 	var supportedTags []language.Tag
 
 	for _, tag := range tags {
@@ -70,22 +95,46 @@ func localeComponents(validate *validator.Validate, tags ...language.Tag) (
 
 		// 不需要再 language.Parse，在 map 中的值必定是合法的。
 		lang, locale := tag.String(), m.translator()
-		if supportedTags = append(supportedTags, tag); translator == nil {
-			translator = ut.New(locale)
+		if supportedTags = append(supportedTags, tag); e.translator == nil {
+			e.translator = ut.New(locale)
 		}
-		_ = translator.AddTranslator(locale, true)
+		_ = e.translator.AddTranslator(locale, true)
 
-		trans, _ := translator.GetTranslator(lang)
+		trans, _ := e.translator.GetTranslator(lang)
 		if err := m.register(validate, trans); err != nil {
 			debugWarning("failed to register [%s] translator: %v", lang, err)
 		}
 	}
 
-	// 创建语言匹配器
-	if len(supportedTags) > 0 {
-		defaultLang = supportedTags[0]
-		matcher = language.NewMatcher(supportedTags)
+	if len(supportedTags) == 0 {
+		return
 	}
 
-	return defaultLang, matcher, translator
+	e.defaultLang = supportedTags[0]
+	e.languageMatcher = language.NewMatcher(supportedTags)
+
+	return func(c *Ctx) error {
+		// 1. 优先检查查询参数 ?lang=zh-CN
+		if lang := c.ctx.Query("lang"); lang != "" {
+			if tag, err := language.Parse(lang); err == nil {
+				c.locale(tag)
+				return c.Next()
+			}
+		}
+
+		// 2. 解析 Accept-Language 头（支持权重）
+		if lang := c.GetHeader(HeaderAcceptLanguage); lang != "" {
+			if tags, _, _ := language.ParseAcceptLanguage(lang); len(tags) > 0 {
+				// 如果有匹配器，使用匹配器选择最合适的语言
+				if matcher := c.engine.languageMatcher; matcher != nil {
+					tag, _, _ := matcher.Match(tags...)
+					c.locale(tag)
+					return c.Next()
+				}
+			}
+		}
+
+		c.locale(c.engine.defaultLang)
+		return c.Next()
+	}
 }
