@@ -167,51 +167,6 @@ r := sgin.New(sgin.Config{
 })
 ```
 
-### OpenAPI 配置
-
-`sgin` 可以通过分析 `Handler` 的输入输出结构体，自动生成 OpenAPI 3.1 文档。启用后，框架会自动生成规范文件和交互式文档页面：
-
-```go
-import "github.com/baagod/sgin/oa"
-
-r := sgin.New(sgin.Config{
-    OpenAPI: oa.New(oa.Config{
-        // OpenAPI 规范基本信息
-        Info: oa.Info{
-            Title:       "我的API",
-            Description: "这是一个示例API",
-            Version:     "1.0.0",
-        },
-    }),
-})
-```
-
-在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
-
-```go
-import "github.com/baagod/sgin/oa"
-
-type LoginReq struct {
-    Username string `json:"username" doc:"用户名"` // doc: OpenAPI 字段描述
-    Password string `json:"password" doc:"密码"`
-}
-
-// 注册路由时添加文档描述
-r.POST("/login", func(op *oa.Operation) {
-    op.Summary = "用户登录"
-    op.Tags = []string{"Auth"}
-    op.Description = "用户登录接口，返回认证令牌"
-}, func(c *sgin.Ctx, req LoginReq) (string, error) {
-    // 业务逻辑...
-    return "token-xxx", nil
-})
-```
-
-启动后访问以下URL查看生成的文档：
-
-- `/openapi.yaml` - OpenAPI 规范文件
-- `/docs` - 交互式API文档页面
-
 ### Panic 恢复配置
 
 `sgin` 内置了一个增强的 `Recovery` 中间件，它提供了更强大的调试能力：
@@ -346,7 +301,7 @@ type LoginReq struct {
 **客户端请求示例：**
 
 1. `/login?lang=zh-CN`
-2. `/login`，携带 `Accept-Language: zh-CN` 头 ( 支持权重 ) 。
+2. `/login`，携带 `Accept-Language: zh-CN` 头 (支持权重)。
 
 优先检测查询参数 `?lang=zh-CN`，校验失败会返回对应语言的错误，如：`"用户名不能为空"`。
 
@@ -362,3 +317,48 @@ type LoginReq struct {
 - 🇪🇸 西班牙文 (Spanish)
 
 可通过 `sgin.SupportedLanguages()` 函数获取受支持的语言列表。
+
+### OpenAPI 配置
+
+`sgin` 可以通过分析 `Handler` 的输入输出结构体，自动生成 OpenAPI 3.1 文档。启用后，框架会自动生成规范文件和交互式文档页面：
+
+```go
+import "github.com/baagod/sgin/oa"
+
+r := sgin.New(sgin.Config{
+    OpenAPI: oa.New(oa.Config{
+        // OpenAPI 规范基本信息
+        Info: oa.Info{
+            Title:       "我的API",
+            Description: "这是一个示例API",
+            Version:     "1.0.0",
+        },
+    }),
+})
+```
+
+在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
+
+```go
+import "github.com/baagod/sgin/oa"
+
+type LoginReq struct {
+    Username string `json:"username" doc:"用户名"` // doc: OpenAPI 字段描述
+    Password string `json:"password" doc:"密码"`
+}
+
+// 注册路由时添加文档描述
+r.POST("/login", func(op *oa.Operation) {
+    op.Summary = "用户登录"
+    op.Tags = []string{"Auth"}
+    op.Description = "用户登录接口，返回认证令牌"
+}, func(c *sgin.Ctx, req LoginReq) (string, error) {
+    // 业务逻辑...
+    return "token-xxx", nil
+})
+```
+
+启动后访问以下URL查看生成的文档：
+
+- `/openapi.yaml` - OpenAPI 规范文件
+- `/docs` - 交互式API文档页面
