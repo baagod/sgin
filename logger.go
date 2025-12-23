@@ -1,10 +1,11 @@
 package sgin
 
 import (
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,8 +56,12 @@ func Logger(c *Ctx) {
 			logMap["error"] = errMsg
 		}
 
-		jsonBytes, _ := json.Marshal(logMap)
-		next = logger(c, msg, string(jsonBytes))
+		var sb strings.Builder
+		enc := sonic.ConfigFastest.NewEncoder(&sb)
+		enc.SetEscapeHTML(false) // 禁止 HTML 转义
+		_ = enc.Encode(logMap)
+
+		next = logger(c, msg, sb.String())
 	}
 
 	if next { // 默认输出 msg，方便终端查看。

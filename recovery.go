@@ -2,7 +2,6 @@ package sgin
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 // ANSI Color Codes
@@ -79,9 +80,9 @@ func (r *RecoverInfo) String() string {
 
 func (r *RecoverInfo) JSON() string {
 	var sb strings.Builder
-	enc := json.NewEncoder(&sb)
-	enc.SetEscapeHTML(false) // 关键：禁止 HTML 转义
-	enc.SetIndent("", "    ")
+	enc := sonic.ConfigFastest.NewEncoder(&sb)
+	enc.SetEscapeHTML(false) // 禁止 HTML 转义
+	// enc.SetIndent("", "    ")
 	_ = enc.Encode(r)
 	return sb.String()
 }

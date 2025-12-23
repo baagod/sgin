@@ -114,7 +114,7 @@ func localeMiddleware(c *Ctx) error {
 	// 1. 优先检查查询参数 ?lang=zh-CN
 	if lang := c.ctx.Query("lang"); lang != "" {
 		if tag, err := language.Parse(lang); err == nil {
-			c.SetLocale(tag)
+			c.locale(tag)
 			return c.Next()
 		}
 	}
@@ -125,13 +125,13 @@ func localeMiddleware(c *Ctx) error {
 			// 如果有匹配器，使用匹配器选择最合适的语言
 			if matcher := c.engine.languageMatcher; matcher != nil {
 				tag, _, _ := matcher.Match(tags...)
-				c.SetLocale(tag)
+				c.locale(tag)
 				return c.Next()
 			}
 		}
 	}
 
-	c.SetLocale(c.engine.defaultLang)
+	c.locale(c.engine.defaultLang)
 	return c.Next()
 }
 

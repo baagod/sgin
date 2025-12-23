@@ -238,19 +238,6 @@ func (c *Ctx) Get(key string, value ...any) any {
 	return v
 }
 
-// ------ 本地化支持 ------
-
-// Locale 获取当前请求的语言设置
-func (c *Ctx) Locale() language.Tag {
-	locale, _ := c.Get(localeKey).(language.Tag)
-	return locale
-}
-
-// SetLocale 设置当前请求的语言
-func (c *Ctx) SetLocale(locale language.Tag) {
-	c.ctx.Set(localeKey, locale)
-}
-
 // ------ 追踪与调试 ------
 
 // TraceID 获取请求的 [跟踪ID]
@@ -264,6 +251,16 @@ func (c *Ctx) Gin() *gin.Context {
 }
 
 // ------ 私有方法 ------
+
+// locale 获取或设置验证器翻译语言
+func (c *Ctx) locale(tag ...language.Tag) language.Tag {
+	if len(tag) > 0 {
+		c.ctx.Set(localeKey, tag[0])
+		return tag[0]
+	}
+	lang, _ := c.Get(localeKey).(language.Tag)
+	return lang
+}
 
 // sendResult 消费内部归一化的响应结果
 func (c *Ctx) sendResult(r *result) {

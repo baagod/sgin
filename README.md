@@ -125,11 +125,6 @@ c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发�
 - `TraceID() string`: 获取当前请求的跟踪 ID（自动生成或从 `X-Request-ID` 头读取）
 - `Gin() *gin.Context`: 返回底层的 `*gin.Context`（用于访问原生 gin 功能）
 
-#### 多语言支持
-
-- `Locale() language.Tag`: 获取当前请求的语言设置
-- `SetLocale(locale language.Tag)`: 手动设置请求语言（覆盖自动检测）
-
 ### Engine API
 
 `sgin.Engine` 是框架的核心入口，它封装了 `gin.Engine` 并提供了更简洁、一致的 API 设计。以下是 `Engine` 的主要方法：
@@ -335,8 +330,6 @@ r := sgin.New(sgin.Config{
     Locales: []language.Tag{
         language.Chinese,  // 默认语言（第一个）
         language.English,  // 备用语言
-        // 可选：language.Japanese, language.Korean, language.French, 
-        // language.Russian, language.German, language.Spanish
     },
 })
 ```
@@ -355,7 +348,7 @@ type LoginReq struct {
 1. `/login?lang=zh-CN`
 2. `/login`，携带 `Accept-Language: zh-CN` 头 ( 支持权重 ) 。
 
-优先检测查询参数 `?lang=zh-CN`，校验失败会返回对应语言错误，如：`"用户名不能为空"`
+优先检测查询参数 `?lang=zh-CN`，校验失败会返回对应语言的错误，如：`"用户名不能为空"`。
 
 **`sgin` 目前支持如下语言：**
 
