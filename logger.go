@@ -39,9 +39,9 @@ func Logger(c *Ctx) {
 		msg += " | error=" + errMsg
 	}
 
-	// 执行回调或默认输出
+	// 执行回调
 	next := true
-	if logger := c.engine.cfg.Logger; logger != nil {
+	if fn := c.engine.cfg.Logger; fn != nil {
 		logMap := map[string]any{ // 生成 JSON 消息
 			"time":    t,
 			"status":  status,
@@ -61,10 +61,10 @@ func Logger(c *Ctx) {
 		enc.SetEscapeHTML(false) // 禁止 HTML 转义
 		_ = enc.Encode(logMap)
 
-		next = logger(c, msg, sb.String())
+		next = fn(c, msg, sb.String())
 	}
 
-	if next { // 默认输出 msg，方便终端查看。
-		_, _ = fmt.Fprintf(gin.DefaultWriter, "%s\n", msg)
+	if next { // 将默认日志输出到控制台
+		fmt.Println(msg)
 	}
 }
