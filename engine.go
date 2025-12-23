@@ -25,10 +25,9 @@ type Config struct {
 	TrustedProxies []string                    // gin.SetTrustedProxies
 	Recovery       func(c *Ctx, out, s string) // 回调 [带颜色的输出] 和 [结构化日志]
 	ErrorHandler   func(c *Ctx, err error) error
-	// 回调 [纯文本] 和 [JSON] 日志，返回 true 输出默认日志到控制台。
-	Logger  func(c *Ctx, out string, s string) bool
-	OpenAPI *oa.OpenAPI
-	Locales []language.Tag // 绑定验证错误所使用的多语言支持
+	Logger         func(c *Ctx, out string, s string) // 回调 [纯文本] 和 [JSON] 日志
+	OpenAPI        *oa.Config
+	Locales        []language.Tag // 绑定验证错误所使用的多语言支持
 }
 
 // DefaultErrorHandler 默认的错误处理器

@@ -24,7 +24,7 @@ type Router struct {
 	i    gin.IRouter
 	e    *Engine
 	base string // 基础路径
-	api  *oa.OpenAPI
+	api  *oa.Config
 	op   oa.Operation
 }
 

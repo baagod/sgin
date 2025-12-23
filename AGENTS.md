@@ -61,7 +61,7 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 </OBJECTIVE>
 
 <INSTRUCTIONS>
-1. **Execute the required command** to retrieve the changes: `git add .`, `git diff --staged -w`.
+1. **Execute the required command** to retrieve the changes: `git_add .`, `git_diff_staged -w`.
 2. **Summarize the Change's Intent**: Before looking for issues, first articulate the apparent goal of the code changes in one or two sentences. Use this understanding to frame your review.
 3. **Establish context** by reading relevant files. Prioritize:
    a. All files present in the diff.
@@ -115,10 +115,6 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 
 <OUTPUT>
 输出 **必须** 整洁、简洁，并遵循以下结构进行 **简体中文** 输出：
-
-**如果没有发现问题：**
-
-**变更摘要：[用一句话描述整体变更]。**
 
 **如果发现问题：**
 

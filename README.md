@@ -318,7 +318,7 @@ type LoginReq struct {
 
 可通过 `sgin.SupportedLanguages()` 函数获取受支持的语言列表。
 
-### OpenAPI 配置
+### OpenAPI 配置（测试）
 
 `sgin` 可以通过分析 `Handler` 的输入输出结构体，自动生成 OpenAPI 3.1 文档。启用后，框架会自动生成规范文件和交互式文档页面：
 
@@ -326,14 +326,11 @@ type LoginReq struct {
 import "github.com/baagod/sgin/oa"
 
 r := sgin.New(sgin.Config{
-    OpenAPI: oa.New(oa.Config{
-        // OpenAPI 规范基本信息
-        Info: oa.Info{
-            Title:       "我的API",
-            Description: "这是一个示例API",
-            Version:     "1.0.0",
-        },
-    }),
+    OpenAPI: oa.New(func(c *oa.Config) {
+		c.Title = "我的 API"
+		c.Description = "这是一个示例API",
+        c.Version ="1.0.0",
+    })
 })
 ```
 
