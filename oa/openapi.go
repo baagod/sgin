@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Version = "3.1.1"
+const Version = "3.1.2"
 
 var (
 	pathRegex = regexp.MustCompile(`([:*])([^/]+)`)
@@ -92,7 +92,7 @@ type MediaType struct {
 }
 
 type Components struct {
-	Schemas         map[string]*Schema         `yaml:"schemas,omitempty"`
+	Schemas         *Registry                  `yaml:"schemas,omitempty"`
 	SecuritySchemes map[string]*SecurityScheme `yaml:"securitySchemes,omitempty"`
 }
 
