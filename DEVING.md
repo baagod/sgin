@@ -20,28 +20,6 @@ func (r *Registry) MarshalYAML() (interface{}, error)
 func (r *Registry) FromField(t reflect.Type, isPtr bool, hint ...string) *Schema
 ```
 
-### Nullable 字段设计
-
-在 `Schema` 结构体中添加 `Nullable` 字段，用于标记可空类型：
-
-```go
-// schema.go
-type Schema struct {
-    Type                 any                `yaml:"type,omitempty"`
-    Nullable              bool              `yaml:"-"`  // 不序列化到 YAML
-    // ... 其他字段
-}
-
-// 用于辅助快速创建可空的基础类型
-func NewSchema(typ, format string, nullable bool) *Schema {
-	return &{Type: typ, Format: format, Nullable: nullable}
-}
-```
-
-**序列化逻辑**：当 `Nullable == true` 时，将 `Type` 序列化为 `[type, "null"]` 数组（符合 OpenAPI 3.1 最新标准）。
-
-**注意**：只有基础指针类型（boolean, integer, number, string）才需要 Nullable，对象类型（array, object）不设置。
-
 ---
 
 ## 阶段一：基础结构搭建（1-2小时）
@@ -191,8 +169,6 @@ func (r *Registry) buildStructSchema(t reflect.Type, isPtr bool, name string, hi
 - [ ] 递归引用正确检测
 - [ ] 引用格式使用 `prefix`
 - [ ] 避免重复注册同一名称
-- [ ] 基础类型 Nullable 正确设置
-- [ ] Array/Map 不设置 Nullable
 - [ ] Struct 调用 FromField
 
 ---
@@ -310,7 +286,7 @@ func (r *Registry) FromField(t reflect.Type, isPtr bool, hint ...string) *Schema
         s.Required = required
     }
 
-    return s // 不设置 Nullable（Struct 是对象类型）
+    return s
 }
 ```
 
@@ -323,7 +299,6 @@ func (r *Registry) FromField(t reflect.Type, isPtr bool, hint ...string) *Schema
 - [ ] 必填字段正确收集
 - [ ] 引用处理正确
 - [ ] 所有标签正确应用（包括时间格式）
-- [ ] Struct 不设置 Nullable
 
 ---
 
@@ -474,33 +449,15 @@ curl http://localhost:8080/openapi.yaml
 - [ ] 无 panic 或错误
 - [ ] 输出格式正确
 
-### 步骤 5.3：检查 Nullable 序列化
-
-```bash
-# 验证 Nullable 字段是否正确序列化
-# 期望：基础类型出现 type: [boolean, null] 或 type: [string, null]
-# 期望：对象类型（array, object, struct）只有 type，无 type: [type, null]
-grep -A 2 "type:" openapi.yaml
-```
-
-**验证点**：
-- [ ] 基础类型：`type: [boolean, null]` 或 `type: [string, null]`
-- [ ] 对象类型（array, object, struct）：只有 `type: "array"` 或 `type: "object"`
-- [ ] 引用类型：只有 `$ref`，无 `type`
-- [ ] 无 `nullable: true` 字段（因为标签是 `yaml:"-"`）
-
 ---
 
 ## 注意事项
 
-1. **Nullable 字段标签**：`yaml:"-"`，不序列化到 YAML，通过自定义序列化器处理
-2. **Nullable 序列化逻辑**：当 `Nullable == true` 时，将 `Type` 序列化为 `[type, "null"]` 数组
-3. **Nullable 设置范围**：只有基础指针类型（boolean, integer, number, string）才需要 Nullable
-4. **Register 简洁性**：Array/Map 处理直接 2-3 行，不拆分单独方法
-5. **FromField 内聚性**：合并了 parseFieldMeta、generateFieldHint、isFieldRequired、applyFieldTags 等逻辑
-6. **匿名类型处理**：`Register` 返回内联 Schema（非引用），对于匿名结构体
-7. **循环引用**：`exists` map 在整个 Schema 构建周期内有效，通过 `buildStructSchema` 二次调用注册完整 Schema
-8. **DefaultSchemaNamer 签名**：调整为 `func(reflect.Type, string) string`，hint 参数用于匿名结构体
+1. **Register 简洁性**：Array/Map 处理直接 2-3 行，不拆分单独方法
+2. **FromField 内聚性**：合并了 parseFieldMeta、generateFieldHint、isFieldRequired、applyFieldTags 等逻辑
+3. **匿名类型处理**：`Register` 返回内联 Schema（非引用），对于匿名结构体
+4. **循环引用**：`exists` map 在整个 Schema 构建周期内有效，通过 `buildStructSchema` 二次调用注册完整 Schema
+5. **DefaultSchemaNamer 签名**：调整为 `func(reflect.Type, string) string`，hint 参数用于匿名结构体
 
 ## 预期收益
 
@@ -510,4 +467,3 @@ grep -A 2 "type:" openapi.yaml
 | schema_fromType 行数 | 195 | ~60  | -69% |
 | 可测试函数数             | 0   | 3    | +3   |
 | 方法内聚性              | 低   | 高    | 显著   |
-| Nullable 支持清晰度     | 低   | 高    | 显著   |

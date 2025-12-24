@@ -1,9 +1,7 @@
-feat(oa): 重构 Schema 可空类型处理机制
+enhance(ctx): 扩展Get方法支持多级查找并更新示例
 
-- 在 `Schema` 结构体中添加 `Nullable bool` 字段，标签为 `yaml:"-"`
-- 实现 `MarshalYAML()` 方法，当 `Nullable == true` 时将 `Type` 序列化为 `[type, "null"]` 数组
-- 简化 `config.go` 中的类型处理逻辑，直接为指针类型设置 `Nullable: true`
-- 移除复杂的 `TypeNullable()` 函数，统一使用 Schema.Nullable 字段
-- 符合 OpenAPI 3.1 规范，使用数组格式表示可空类型而非单独的 nullable 字段
+- 增强`Get()`方法：支持两级查找（先 `gin.Get`，再 `gin.Value`），提升上下文值访问能力
+- 保持API兼容：`Get` 方法签名不变，增强功能而不破坏现有代码
 
-此次重构使可空类型处理更加简洁、统一，并符合最新的 OpenAPI 规范标准。
+此次修改使 `sgin.Ctx.Get()` 能够访问到通过 `gin.Context.Value()` 设置的值，
+同时示例代码展示了如何实现类型安全的参数绑定高阶函数。
