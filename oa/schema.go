@@ -23,13 +23,6 @@ const (
 	TypeObject  = "object"
 )
 
-func TypeNullable(typ any, t ...reflect.Type) any {
-	if len(t) > 0 && t[0].Kind() == reflect.Ptr {
-		return []any{typ, "null"}
-	}
-	return typ
-}
-
 // 特殊的 JSON Schema 格式
 var (
 	timeType       = reflect.TypeOf(time.Time{})
@@ -41,6 +34,7 @@ var (
 
 type Schema struct {
 	Type                 any                `yaml:"type,omitempty"`
+	Nullable             bool               `yaml:"-"`
 	Title                string             `yaml:"title,omitempty"`
 	Description          string             `yaml:"description,omitempty"`
 	Ref                  string             `yaml:"$ref,omitempty"`
@@ -52,6 +46,13 @@ type Schema struct {
 	Properties           map[string]*Schema `yaml:"properties,omitempty"`
 	Enum                 []any              `yaml:"enum,omitempty"`
 	Required             []string           `yaml:"required,omitempty"`
+}
+
+func (s *Schema) MarshalYAML() (any, error) {
+	if s.Nullable {
+		s.Type = []any{s.Type, "null"}
+	}
+	return s, nil
 }
 
 // fieldInfo 用于存储字段的详细信息，包括其直接父级类型。

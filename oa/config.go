@@ -109,50 +109,49 @@ func (c *Config) schemaFromType(t reflect.Type, nameHint ...string) *Schema {
 	// 处理已知标准库类型
 	switch t {
 	case timeType:
-		return &Schema{Type: TypeNullable(TypeString, t), Format: "date-time"}
+		return &Schema{Type: TypeString, Format: "date-time", Nullable: isPtr}
 	case urlType:
-		return &Schema{Type: TypeNullable(TypeString, t), Format: "uri"}
+		return &Schema{Type: TypeString, Format: "uri", Nullable: isPtr}
 	case ipType, ipAddrType:
-		return &Schema{Type: TypeNullable(TypeString, t), Format: "ipv4"}
+		return &Schema{Type: TypeString, Format: "ipv4", Nullable: isPtr}
 	case rawMessageType:
 		return &Schema{}
 	}
 
-	s := &Schema{}
-
 	switch t.Kind() {
 	case reflect.Bool:
-		s.Type = TypeBoolean
+		return &Schema{Type: TypeBoolean, Nullable: isPtr}
 	case reflect.Int, reflect.Uint:
-		if s.Type = "integer"; bits.UintSize == 32 {
-			s.Format = "int32"
-		} else {
-			s.Format = "int64"
+		if bits.UintSize == 32 {
+			return &Schema{Type: TypeInteger, Format: "int32", Nullable: isPtr}
 		}
+		return &Schema{Type: TypeInteger, Format: "int64", Nullable: isPtr}
 	case reflect.Int64, reflect.Uint64:
-		s.Type, s.Format = TypeInteger, "int64"
+		return &Schema{Type: TypeInteger, Format: "int64", Nullable: isPtr}
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:
-		s.Type, s.Format = TypeInteger, "int32"
+		return &Schema{Type: TypeInteger, Format: "int32", Nullable: isPtr}
 	case reflect.Float32:
-		s.Type, s.Format = TypeNumber, "float"
+		return &Schema{Type: TypeNumber, Format: "float", Nullable: isPtr}
 	case reflect.Float64:
-		s.Type, s.Format = TypeNumber, "double"
+		return &Schema{Type: TypeNumber, Format: "double", Nullable: isPtr}
 	case reflect.String:
-		s.Type = TypeString
+		return &Schema{Type: TypeString, Nullable: isPtr}
 	case reflect.Slice, reflect.Array:
 		if t.Elem().Kind() == reflect.Uint8 {
-			s.Type = TypeString
-			s.ContentEncoding = "base64"
-		} else {
-			s.Type = TypeArray
-			s.Items = c.schemaFromType(t.Elem(), nameHint...)
+			return &Schema{Type: TypeString, ContentEncoding: "base64"}
+		}
+		return &Schema{
+			Type:  TypeArray,
+			Items: c.schemaFromType(t.Elem(), nameHint...),
 		}
 	case reflect.Map:
-		s.Type = TypeObject
-		s.AdditionalProperties = c.schemaFromType(t.Elem(), nameHint...)
+		return &Schema{
+			Type:                 TypeObject,
+			AdditionalProperties: c.schemaFromType(t.Elem(), nameHint...),
+		}
 	case reflect.Struct:
+		s := &Schema{Type: TypeObject}
 		name := t.Name()
-		s.Type = TypeObject
 
 		if c.SchemaNamer != nil {
 			name = c.SchemaNamer(t)
@@ -282,16 +281,7 @@ func (c *Config) schemaFromType(t reflect.Type, nameHint ...string) *Schema {
 		return nil // 忽略不支持的类型
 	}
 
-	switch s.Type {
-	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
-		// 作为指针的标量类型默认可为空。
-		// 可以通过结构体中的 `nullable:"false"` 字段标签覆盖。
-		if isPtr {
-			s.Type = []any{s.Type, "null"}
-		}
-	}
-
-	return s
+	return &Schema{}
 }
 
 // parseRequestParams 解析请求参数 (Path, Query, Header)

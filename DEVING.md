@@ -6,27 +6,50 @@
 ## 核心设计
 
 ```go
-// schema_registry.go
+// registry.go
 type Registry struct {
+    Namer   func(reflect.Type, string) string `yaml:"-"`
     schemas map[string]*Schema
-    namer   func(reflect.Type, string) string
     exists  map[reflect.Type]bool
     prefix  string
 }
 
-func NewRegistry(namer func(reflect.Type) string) *Registry
-func (r *Registry) Register(t reflect.Type, hint ...string) string
-func (r *Registry) MarshalYAML() (any, error)
-func (r *Registry) buildSchema(t reflect.Type, hint ...string) *Schema
+func NewRegistry(prefix string, namer func(reflect.Type, string) string) *Registry
+func (r *Registry) Register(t reflect.Type, hint ...string) *Schema
+func (r *Registry) MarshalYAML() (interface{}, error)
+func (r *Registry) FromField(t reflect.Type, isPtr bool, hint ...string) *Schema
 ```
+
+### Nullable 字段设计
+
+在 `Schema` 结构体中添加 `Nullable` 字段，用于标记可空类型：
+
+```go
+// schema.go
+type Schema struct {
+    Type                 any                `yaml:"type,omitempty"`
+    Nullable              bool              `yaml:"-"`  // 不序列化到 YAML
+    // ... 其他字段
+}
+
+// 用于辅助快速创建可空的基础类型
+func NewSchema(typ, format string, nullable bool) *Schema {
+	return &{Type: typ, Format: format, Nullable: nullable}
+}
+```
+
+**序列化逻辑**：当 `Nullable == true` 时，将 `Type` 序列化为 `[type, "null"]` 数组（符合 OpenAPI 3.1 最新标准）。
+
+**注意**：只有基础指针类型（boolean, integer, number, string）才需要 Nullable，对象类型（array, object）不设置。
 
 ---
 
-## 阶段一：基础结构搭建（2-3小时）
+## 阶段一：基础结构搭建（1-2小时）
 
-### 步骤 1.1：创建 schema_registry.go
+### 步骤 1.1：创建 registry.go
+
 ```go
-// 文件：oa/schema_registry.go
+// 文件：oa/registry.go
 package oa
 
 import (
@@ -36,31 +59,33 @@ import (
 )
 
 type Registry struct {
+    Namer   func(reflect.Type, string) string `yaml:"-"`
     schemas map[string]*Schema
-    namer   func(reflect.Type) string
     exists  map[reflect.Type]bool
     prefix  string
 }
 
-func NewRegistry(namer func(reflect.Type) string) *Registry {
+func NewRegistry(prefix string, namer func(reflect.Type, string) string) *Registry {
     return &Registry{
-        schemas: make(map[string]*Schema),
-        namer:   namer,
-        exists:  make(map[reflect.Type]bool),
-        prefix:  "#/components/schemas/",
+        Namer:   namer,
+        prefix:  prefix,
+        schemas: map[string]*Schema{},
+        exists:  map[reflect.Type]bool{},
     }
 }
 ```
 
 **验证点**：
 - [ ] 结构体字段命名正确
-- [ ] `prefix` 默认值设置正确
+- [ ] `prefix` 参数正确传递
+- [ ] `Namer` 签名包含 hint 参数
 - [ ] 所有必需的包已导入
 
 ### 步骤 1.2：实现 MarshalYAML
+
 ```go
-// schema_registry.go
-func (r *Registry) MarshalYAML() (interface{}, error) {
+// registry.go
+func (r *Registry) MarshalYAML() (any, error) {
     return r.schemas, nil
 }
 ```
@@ -70,6 +95,7 @@ func (r *Registry) MarshalYAML() (interface{}, error) {
 - [ ] 输出格式符合 OpenAPI 规范
 
 ### 步骤 1.3：修改 Components 结构
+
 ```go
 // openapi.go
 type Components struct {
@@ -84,36 +110,80 @@ type Components struct {
 
 ---
 
-## 阶段二：核心逻辑迁移（4-5小时）
+## 阶段二：核心 Register 方法（3-4小时）
 
-### 步骤 2.1：实现 Register 方法框架
+### 步骤 2.1：实现 Register 方法
+
 ```go
-// schema_registry.go
-func (r *Registry) Register(t reflect.Type, hint ...string) string {
+// registry.go
+// Register 注册类型并返回 Schema（引用或内联）
+func (r *Registry) Register(t reflect.Type, hint ...string) *Schema {
     t = helper.DeRef(t)
 
     // 递归引用检测
     if r.exists[t] {
-        if name := r.namer(t); name != "" {
-            return r.prefix + name
+        if name := r.Namer(t, ""); name != "" {
+            return &Schema{Ref: r.prefix + name}
         }
-        return ""
+        return nil
     }
 
     r.exists[t] = true
 
-    // 构建 Schema
-    schema := r.buildSchema(t, hint...)
-
-    // 注册命名结构体
-    if name := r.namer(t); name != "" {
-        if r.schemas[name] == nil {
-            r.schemas[name] = schema
-        }
-        return r.prefix + name
+    isPtr := t.Kind() == reflect.Ptr
+    if isPtr {
+        t = t.Elem()
     }
 
-    return ""
+    // 基础类型：直接构建 Schema
+    switch t.Kind() {
+    case reflect.Bool:
+        return &Schema{Type: TypeBoolean, Nullable: isPtr}
+    case reflect.Int, reflect.Uint:
+        if bits.UintSize == 32 {
+			return &Schema(Type: TypeInteger, Format: "int32", Nullable: isPtr)
+        }
+        return &Schema(Type: TypeInteger, Format: "int64", Nullable: isPtr)
+    case reflect.Int64, reflect.Uint64:
+        return &Schema(Type: TypeInteger, Format: "int64", Nullable: isPtr)
+    case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:
+        return &Schema(Type: TypeInteger, Format: "int32", Nullable: isPtr)
+    case reflect.Float32:
+        return &Schema(Type: TypeNumber, Format: "float", Nullable: isPtr)
+    case reflect.Float64:
+        return &Schema(Type: TypeNumber, Format: "double", Nullable: isPtr)
+    case reflect.String:
+        return &Schema{Type: TypeString, Nullable: isPtr}
+    case reflect.Slice, reflect.Array:
+        if t.Elem().Kind() == reflect.Uint8 { // []byte 特殊处理
+            return &Schema{Type: TypeString, ContentEncoding: "base64"}
+        }
+        return &Schema{Type: TypeArray, Items: r.Register(t.Elem())}
+    case reflect.Map:
+        return &Schema{Type: TypeObject, AdditionalProperties: r.Register(t.Elem())}
+    case reflect.Struct:
+        return r.FromField(t, isPtr, hint...)
+    case Interface:
+        // 接口可以是任意对象，通过到下面处理。
+    default:
+        return nil
+    }
+
+    // 注册命名结构体到 components
+    name := r.Namer(t, "")
+    if name != "" {
+        // 通过再次调用 Register 获取完整 Schema（不检查 exists）
+        schema := r.buildStructSchema(t, isPtr, name, hint...)
+        r.schemas[name] = schema
+        return &Schema{Ref: r.prefix + name}
+    }
+
+    return &Schema{}
+}
+
+// buildStructSchema 构建结构体完整 Schema（内部方法，不检查 exists）
+func (r *Registry) buildStructSchema(t reflect.Type, isPtr bool, name string, hint ...string) *Schema {
+    return r.FromField(t, isPtr, hint...)
 }
 ```
 
@@ -121,135 +191,32 @@ func (r *Registry) Register(t reflect.Type, hint ...string) string {
 - [ ] 递归引用正确检测
 - [ ] 引用格式使用 `prefix`
 - [ ] 避免重复注册同一名称
-
-### 步骤 2.2：迁移基础类型处理
-```go
-// schema_registry.go
-func (r *Registry) buildSchema(t reflect.Type, hint ...string) *Schema {
-    isPtr := t.Kind() == reflect.Ptr
-    if isPtr {
-        t = t.Elem()
-    }
-
-    // 暂时移除特殊类型处理（time、URL、IP）
-
-    switch t.Kind() {
-    case reflect.Bool:
-        return &Schema{Type: TypeBoolean}
-    case reflect.Int, reflect.Uint:
-        s := &Schema{Type: TypeInteger}
-        if bits.UintSize == 32 {
-            s.Format = "int32"
-        } else {
-            s.Format = "int64"
-        }
-        return r.applyNullable(s, isPtr)
-    case reflect.Int64, reflect.Uint64:
-        return r.applyNullable(&Schema{Type: TypeInteger, Format: "int64"}, isPtr)
-    case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint8, reflect.Uint16, reflect.Uint32:
-        return r.applyNullable(&Schema{Type: TypeInteger, Format: "int32"}, isPtr)
-    case reflect.Float32:
-        return r.applyNullable(&Schema{Type: TypeNumber, Format: "float"}, isPtr)
-    case reflect.Float64:
-        return r.applyNullable(&Schema{Type: TypeNumber, Format: "double"}, isPtr)
-    case reflect.String:
-        return r.applyNullable(&Schema{Type: TypeString}, isPtr)
-    case reflect.Slice, reflect.Array:
-        return r.buildArray(t, isPtr)
-    case reflect.Map:
-        return r.buildMap(t, isPtr)
-    case reflect.Struct:
-        return r.buildStruct(t, isPtr, hint...)
-    default:
-        return nil
-    }
-}
-
-func (r *Registry) applyNullable(s *Schema, isPtr bool) *Schema {
-    if isPtr {
-        s.Type = []any{s.Type, "null"}
-    }
-    return s
-}
-```
-
-**验证点**：
-- [ ] 所有基础类型正确映射
-- [ ] Nullable 逻辑正确应用
-- [ ] 特殊类型暂时跳过
-
-### 步骤 2.3：实现 buildArray
-```go
-// schema_registry.go
-func (r *Registry) buildArray(t reflect.Type, isPtr bool) *Schema {
-    if t.Elem().Kind() == reflect.Uint8 {
-        s := &Schema{Type: TypeString, ContentEncoding: "base64"}
-        return r.applyNullable(s, isPtr)
-    }
-
-    s := &Schema{Type: TypeArray}
-    s.Items = r.Register(t.Elem())
-    return r.applyNullable(s, isPtr)
-}
-```
-
-**验证点**：
-- [ ] `[]byte` 正确识别为 base64 字符串
-- [ ] 数组 Items 递归调用 `Register`
-
-### 步骤 2.4：实现 buildMap
-```go
-// schema_registry.go
-func (r *Registry) buildMap(t reflect.Type, isPtr bool) *Schema {
-    s := &Schema{Type: TypeObject}
-    s.AdditionalProperties = r.Register(t.Elem())
-    return r.applyNullable(s, isPtr)
-}
-```
-
-**验证点**：
-- [ ] Map 类型正确映射为 Object
-- [ ] AdditionalProperties 递归调用 `Register`
+- [ ] 基础类型 Nullable 正确设置
+- [ ] Array/Map 不设置 Nullable
+- [ ] Struct 调用 FromField
 
 ---
 
-## 阶段三：Struct 处理逻辑迁移（6-8小时）
+## 阶段三：FromField 方法（4-5小时）
 
-### 步骤 3.1：实现 buildStruct 框架
+### 步骤 3.1：实现 FromField
+
 ```go
-// schema_registry.go
-func (r *Registry) buildStruct(t reflect.Type, isPtr bool, hint ...string) *Schema {
-    name := r.namer(t)
+// registry.go
+// FromField 处理结构体类型，合并字段处理逻辑
+func (r *Registry) FromField(t reflect.Type, isPtr bool, hint ...string) *Schema {
+    name := r.Namer(t, "")
 
     // 处理匿名结构体命名提示
     if name == "" && len(hint) > 0 {
         name = hint[0]
     }
 
-    props, required := r.collectStructFields(t, name)
-
-    s := &Schema{Type: TypeObject, Properties: props}
-    if len(required) > 0 {
-        s.Required = required
-    }
-
-    return r.applyNullable(s, isPtr)
-}
-```
-
-**验证点**：
-- [ ] 命名逻辑正确
-- [ ] 匿名结构体命名提示生效
-- [ ] Required 列表正确设置
-
-### 步骤 3.2：实现 collectStructFields
-```go
-// schema_registry.go
-func (r *Registry) collectStructFields(t reflect.Type, parentName string) (map[string]*Schema, []string) {
     props := make(map[string]*Schema)
     required := []string{}
     fieldSet := make(map[string]struct{})
 
+    // 遍历所有字段（BFS 处理内嵌）
     getFields(t, func(info fieldInfo) {
         f := info.Field
 
@@ -259,155 +226,126 @@ func (r *Registry) collectStructFields(t reflect.Type, parentName string) (map[s
         }
         fieldSet[f.Name] = struct{}{}
 
-        // 解析字段元信息
-        fieldName, skip := r.parseFieldMeta(f)
-        if skip {
+        // 解析 JSON 名称
+        tag := f.Tag.Get("json")
+        if tag == "-" {
             return
         }
+        fieldName := f.Name
+        if parts := strings.Split(tag, ","); len(parts) > 0 && parts[0] != "" {
+            fieldName = parts[0]
+        }
 
-        // 生成命名提示
-        subHint := r.generateFieldHint(f, parentName)
+        // 生成匿名结构体命名提示
+        subHint := ""
+        if f.Type.Kind() == reflect.Struct && f.Type.Name() == "" && name != "" {
+            subHint = name + f.Name + "Struct"
+        }
 
         // 递归构建 Schema
         schema := r.Register(f.Type, subHint)
-        if schema == "" {
+        if schema == nil {
             return
         }
-        fieldSchema := r.getFieldSchema(schema)
+
+        // 引用处理：如果是引用，转换为引用 Schema
+        fieldSchema := schema
+        if schema.Ref != "" {
+            fieldSchema = schema
+        }
 
         // 应用标签
-        r.applyFieldTags(fieldSchema, f)
+        fieldSchema.Description = f.Tag.Get("doc")
+        fieldSchema.ContentEncoding = f.Tag.Get("encoding")
+
+        if v := f.Tag.Get("format"); v != "" {
+            // 特殊处理时间格式
+            switch v {
+            case "2006-01-02":
+                fieldSchema.Format = "date"
+            case "15:04:05":
+                fieldSchema.Format = "time"
+            default:
+                fieldSchema.Format = v
+            }
+        }
+
+        if v := f.Tag.Get("default"); v != "" {
+            fieldSchema.Default = parseTagValue(v, f.Name, fieldSchema)
+        }
+
+        if v := f.Tag.Get("enum"); v != "" {
+            ts := fieldSchema
+            if ts.Type == TypeArray {
+                if ts.Items != nil {
+                    ts = ts.Items
+                }
+            }
+
+            enum := make([]any, 0)
+            for _, p := range strings.Split(v, ",") {
+                enum = append(enum, parseTagValue(p, f.Name, ts))
+            }
+
+            if len(enum) > 0 {
+                if fieldSchema.Type == TypeArray && fieldSchema.Items != nil {
+                    fieldSchema.Items.Enum = enum
+                } else {
+                    fieldSchema.Enum = enum
+                }
+            }
+        }
 
         // 添加到属性
         props[fieldName] = fieldSchema
 
         // 检查必填
-        if r.isFieldRequired(f) {
+        if strings.Contains(f.Tag.Get("binding"), "required") {
             required = append(required, fieldName)
         }
     })
 
-    return props, required
+    s := &Schema{Type: TypeObject, Properties: props}
+    if len(required) > 0 {
+        s.Required = required
+    }
+
+    return s // 不设置 Nullable（Struct 是对象类型）
 }
 ```
 
 **验证点**：
+- [ ] 命名逻辑正确
+- [ ] 匿名结构体命名提示生效
+- [ ] Required 列表正确设置
 - [ ] 字段遮蔽逻辑正确
 - [ ] JSON 标签 `-` 正确跳过
 - [ ] 必填字段正确收集
-
-### 步骤 3.3：辅助方法实现
-```go
-// schema_registry.go
-
-// parseFieldMeta 解析 JSON 名称
-func (r *Registry) parseFieldMeta(f reflect.StructField) (string, bool) {
-    tag := f.Tag.Get("json")
-    if tag == "-" {
-        return "", true
-    }
-
-    fieldName := f.Name
-    if parts := strings.Split(tag, ","); len(parts) > 0 && parts[0] != "" {
-        fieldName = parts[0]
-    }
-    return fieldName, false
-}
-
-// generateFieldHint 生成匿名结构体命名提示
-func (r *Registry) generateFieldHint(f reflect.StructField, parentName string) string {
-    if f.Type.Kind() == reflect.Struct && f.Type.Name() == "" && parentName != "" {
-        return parentName + f.Name + "Struct"
-    }
-    return ""
-}
-
-// isFieldRequired 检查字段是否必填
-func (r *Registry) isFieldRequired(f reflect.StructField) bool {
-    return strings.Contains(f.Tag.Get("binding"), "required")
-}
-
-// getFieldSchema 从引用字符串获取实际 Schema
-func (r *Registry) getFieldSchema(ref string) *Schema {
-    if strings.HasPrefix(ref, r.prefix) {
-        return &Schema{Ref: ref}
-    }
-    return nil
-}
-```
-
-**验证点**：
-- [ ] JSON 标签解析正确
-- [ ] 匿名结构体提示生成逻辑正确
-
-### 步骤 3.4：实现 applyFieldTags
-```go
-// schema_registry.go
-func (r *Registry) applyFieldTags(schema *Schema, f reflect.StructField) {
-    schema.Description = f.Tag.Get("doc")
-    schema.ContentEncoding = f.Tag.Get("encoding")
-
-    if v := f.Tag.Get("format"); v != "" {
-        schema.Format = v
-    }
-
-    if v := f.Tag.Get("default"); v != "" {
-        schema.Default = parseTagValue(v, f.Name, schema)
-    }
-
-    if v := f.Tag.Get("enum"); v != "" {
-        r.applyEnumTag(schema, f, v)
-    }
-}
-
-// applyEnumTag 处理枚举标签
-func (r *Registry) applyEnumTag(schema *Schema, f reflect.StructField, enumStr string) {
-    ts := schema
-    if ts.Type == TypeArray {
-        if ts.Items != nil {
-            ts = ts.Items
-        }
-    }
-
-    enum := make([]any, 0)
-    for _, p := range strings.Split(enumStr, ",") {
-        enum = append(enum, parseTagValue(p, f.Name, ts))
-    }
-
-    if len(enum) > 0 {
-        if schema.Type == TypeArray && schema.Items != nil {
-            schema.Items.Enum = enum
-        } else {
-            schema.Enum = enum
-        }
-    }
-}
-```
-
-**验证点**：
-- [ ] 所有标签正确应用
-- [ ] 枚举处理支持数组和非数组
+- [ ] 引用处理正确
+- [ ] 所有标签正确应用（包括时间格式）
+- [ ] Struct 不设置 Nullable
 
 ---
 
-## 阶段四：Config 集成（1-2小时）
+## 阶段四：Config 集成（1小时）
 
 ### 步骤 4.1：修改 Config 结构
+
 ```go
 // config.go
 type Config struct {
     *OpenAPI
-    SchemaNamer func(reflect.Type) string
--   tagMap     map[string]bool
-+   registry    *Registry
+    tagMap map[string]bool // 暂时不做处理，不处于本次重构范围内。
 }
 ```
 
 **验证点**：
-- [ ] 移除 `tagMap`
-- [ ] 添加 `registry` 字段
+- [ ] 移除 `registry` 字段
+- [ ] 移除 `SchemaNamer` 字段
+- [ ] 保留 `tagMap`
 
 ### 步骤 4.2：修改 New 函数
+
 ```go
 // config.go
 func New(f ...func(*Config)) *Config {
@@ -417,14 +355,27 @@ func New(f ...func(*Config)) *Config {
             Info:    &Info{Title: "APIs", Version: "0.0.1"},
             Paths:   map[string]*PathItem{},
             Components: &Components{
-                Schemas: NewRegistry(DefaultSchemaNamer),
-                SecuritySchemes: map[string]*SecurityScheme{...},
+                Schemas: NewRegistry("#/components/schemas/", DefaultSchemaNamer),
+                SecuritySchemes: map[string]*SecurityScheme{
+                    "bearer": {
+                        Type:         "http",
+                        Scheme:       "bearer",
+                        BearerFormat: "JWT",
+                    },
+                    "basic": {
+                        Type:   "http",
+                        Scheme: "basic",
+                    },
+                    "apikey": {
+                        Type: "apiKey",
+                        Name: "api-key",
+                        In:   "header",
+                    },
+                },
             },
         },
-        SchemaNamer: DefaultSchemaNamer,
+        tagMap: map[string]bool{},
     }
-
-    c.registry = c.Components.Schemas
 
     if len(f) > 0 {
         f[0](c)
@@ -435,53 +386,74 @@ func New(f ...func(*Config)) *Config {
 ```
 
 **验证点**：
-- [ ] Registry 正确初始化
-- [ ] Config.registry 指向 Components.Schemas
+- [ ] Registry 正确初始化（带 prefix）
+- [ ] `DefaultSchemaNamer` 正确传递（需调整签名）
+- [ ] `tagMap` 初始化
 
-### 步骤 4.3：修改 schemaFromType 调用
+### 步骤 4.3：修改 schemaFromType 委托
+
 ```go
 // config.go
-func (c *Config) schemaFromType(t reflect.Type, hint ...string) *Schema {
-    ref := c.registry.Register(t, hint...)
+// schemaFromType 委托给 Registry.Register
+func (c *Config) schemaFromType(t reflect.Type, nameHint ...string) *Schema {
+    return c.Components.Schemas.Register(t, nameHint...)
+}
+```
 
-    if strings.HasPrefix(ref, c.registry.prefix) {
-        return &Schema{Ref: ref}
+**验证点**：
+- [ ] schemaFromType 正确委托
+- [ ] 参数传递正确
+
+### 步骤 4.4：调整 DefaultSchemaNamer 签名
+
+```go
+// config.go
+// DefaultSchemaNamer 根据 "去域名 + 取最后两级" 策略生成名称
+func DefaultSchemaNamer(t reflect.Type, hint string) string {
+    t = helper.DeRef(t)
+    name := t.Name()
+
+    // 如果有 hint（匿名结构体），直接返回
+    if name == "" && hint != "" {
+        return hint
     }
 
-    return nil
+    // 如果是命名类型，使用原逻辑
+    if name != "" {
+        parts := strings.Split(t.PkgPath(), "/")
+
+        if len(parts) > 0 && strings.Contains(parts[0], ".") {
+            parts = parts[1:]
+        }
+
+        if count := len(parts); count >= 2 {
+            p1 := toTitle(parts[count-2])
+            p2 := toTitle(parts[count-1])
+            return p1 + p2 + name
+        } else if count == 1 {
+            return toTitle(parts[0]) + name
+        }
+    }
+
+    return name
 }
 ```
 
 **验证点**：
-- [ ] schemaFromType 调用正确委托
-- [ ] 引用处理正确
-
-### 步骤 4.4：移除 tagMap 相关代码
-```go
-// config.go - registerOperation 方法
-func (c *Config) registerOperation(op *Operation, path, method string) {
-    // ... 其他代码 ...
-
--   for _, tag := range op.Tags {
--       if !c.tagMap[tag] {
--           c.tagMap[tag] = true
--       }
--   }
-}
-```
-
-**验证点**：
-- [ ] tagMap 引用全部移除
-- [ ] 标签去重逻辑评估必要性
+- [ ] `DefaultSchemaNamer` 签名调整为 `func(reflect.Type, string) string`
+- [ ] 匿名结构体处理正确
+- [ ] 命名类型处理正确
 
 ---
 
-## 阶段五：清理和验证（2-3小时）
+## 阶段五：清理和验证（1-2小时）
 
 ### 步骤 5.1：删除冗余代码
+
 ```go
 // config.go
-- // 删除 schemaFromType 的旧实现（已在 Registry 中）
+// 删除 schemaFromType 的旧实现（已在 Registry 中实现）
+// 保留特殊类型处理逻辑（time、URL、IP 等），后续可集成到 Registry 的 Register 方法中
 ```
 
 **验证点**：
@@ -489,6 +461,7 @@ func (c *Config) registerOperation(op *Operation, path, method string) {
 - [ ] 只保留必要的工具函数
 
 ### 步骤 5.2：运行测试
+
 ```bash
 cd example
 go run main.go
@@ -499,33 +472,42 @@ curl http://localhost:8080/openapi.yaml
 - [ ] OpenAPI 文档生成正确
 - [ ] Schema 结构符合预期
 - [ ] 无 panic 或错误
+- [ ] 输出格式正确
 
-### 步骤 5.3：对比验证
+### 步骤 5.3：检查 Nullable 序列化
+
 ```bash
-git stash
-go run example/main.go > before.yaml
-git stash pop
-go run example/main.go > after.yaml
-diff before.yaml after.yaml
+# 验证 Nullable 字段是否正确序列化
+# 期望：基础类型出现 type: [boolean, null] 或 type: [string, null]
+# 期望：对象类型（array, object, struct）只有 type，无 type: [type, null]
+grep -A 2 "type:" openapi.yaml
 ```
 
 **验证点**：
-- [ ] 输出完全一致（或等价）
-- [ ] 无功能退化
+- [ ] 基础类型：`type: [boolean, null]` 或 `type: [string, null]`
+- [ ] 对象类型（array, object, struct）：只有 `type: "array"` 或 `type: "object"`
+- [ ] 引用类型：只有 `$ref`，无 `type`
+- [ ] 无 `nullable: true` 字段（因为标签是 `yaml:"-"`）
 
 ---
 
 ## 注意事项
 
-1. **匿名类型处理**：当前 `Register` 返回空字符串表示匿名类型，需要 `schemaFromType` 返回内联 Schema
-2. **特殊类型**：暂时移除 `time`、`URL`、`IP` 等处理，后续可添加 `specialTypeHandler`
-3. **循环引用**：`exists` map 在整个 Schema 构建周期内有效，无需 `Reset()`
+1. **Nullable 字段标签**：`yaml:"-"`，不序列化到 YAML，通过自定义序列化器处理
+2. **Nullable 序列化逻辑**：当 `Nullable == true` 时，将 `Type` 序列化为 `[type, "null"]` 数组
+3. **Nullable 设置范围**：只有基础指针类型（boolean, integer, number, string）才需要 Nullable
+4. **Register 简洁性**：Array/Map 处理直接 2-3 行，不拆分单独方法
+5. **FromField 内聚性**：合并了 parseFieldMeta、generateFieldHint、isFieldRequired、applyFieldTags 等逻辑
+6. **匿名类型处理**：`Register` 返回内联 Schema（非引用），对于匿名结构体
+7. **循环引用**：`exists` map 在整个 Schema 构建周期内有效，通过 `buildStructSchema` 二次调用注册完整 Schema
+8. **DefaultSchemaNamer 签名**：调整为 `func(reflect.Type, string) string`，hint 参数用于匿名结构体
 
 ## 预期收益
 
-| 指标 | 重构前 | 重构后 | 改进 |
-|------|--------|--------|------|
-| config.go 行数 | 438 | ~200 | -54% |
-| schemaFromType 行数 | 195 | ~50 | -74% |
-| 可测试函数数 | 0 | 15 | +15 |
-| 职责分离 | 低 | 高 | 显著 |
+| 指标                 | 重构前 | 重构后  | 改进   |
+|--------------------|-----|------|------|
+| config.go 行数       | 438 | ~180 | -59% |
+| schema_fromType 行数 | 195 | ~60  | -69% |
+| 可测试函数数             | 0   | 3    | +3   |
+| 方法内聚性              | 低   | 高    | 显著   |
+| Nullable 支持清晰度     | 低   | 高    | 显著   |
