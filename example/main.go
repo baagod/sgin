@@ -17,13 +17,15 @@ func main() {
 		OpenAPI: sgin.NewAPI(),
 	})
 
-	r.GET("/hello", sgin.Ho(func(c *sgin.Ctx, req HelloReq) string {
-		return "Hello " + req.Name
+	r.GET("/hello", sgin.Ho(func(c *sgin.Ctx, req HelloReq) error {
+		return nil
 	}))
 
 	r.GET("/doc", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
 		return "ok"
-	}))
+	}), func(op *sgin.Operation) {
+		op.Summary = "Doc Test"
+	})
 
 	_ = r.Run(":8080")
 }

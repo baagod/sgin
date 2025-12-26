@@ -2,6 +2,7 @@ package sgin
 
 import (
 	"bytes"
+	"reflect"
 	"regexp"
 
 	"gopkg.in/yaml.v3"
@@ -108,17 +109,21 @@ type SecurityScheme struct {
 }
 
 // YAML 返回 YAML 格式的 OpenAPI 规范
-func (oa *OpenAPI) YAML() ([]byte, error) {
+func (a *OpenAPI) YAML() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 
-	if err := enc.Encode(oa); err != nil {
+	if err := enc.Encode(a); err != nil {
 		return nil, err
 	}
 
 	_ = enc.Close()
 	return buf.Bytes(), nil
+}
+
+func (a *OpenAPI) Schema(t reflect.Type) *Schema {
+	return a.Components.Schemas.Schema(t)
 }
 
 // Clone 返回一份深度的 Operation 副本
