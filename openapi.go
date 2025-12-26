@@ -25,6 +25,8 @@ type OpenAPI struct {
 	Components *Components          `yaml:"components"`
 	Security   []Requirement        `yaml:"security,omitempty"`
 	Tags       []*Tag               `yaml:"tags,omitempty"`
+
+	tagMap map[string]bool
 }
 
 type Info struct {
@@ -124,10 +126,16 @@ func (o *Operation) Clone() *Operation {
 	if o == nil {
 		return nil
 	}
+
 	var clone Operation
 	if data, err := yaml.Marshal(o); err == nil {
 		_ = yaml.Unmarshal(data, &clone)
 	}
+
+	if clone.Responses == nil {
+		clone.Responses = map[string]*ResponseBody{}
+	}
+
 	return &clone
 }
 

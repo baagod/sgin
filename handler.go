@@ -38,6 +38,14 @@ func (m *HandleMeta) Delete(h Handler) {
 	m.m.Delete(h)
 }
 
+func (m *HandleMeta) Pop(h Handler) (a *HandleArg, ok bool) {
+	if v, exist := m.m.Load(h); exist {
+		a, ok = v.(*HandleArg)
+	}
+	m.m.Delete(h)
+	return
+}
+
 type Handler = gin.HandlerFunc
 
 // H 创建一个带有 [输入] 和 [输出] 的强类型处理器 (支持 OpenAPI)

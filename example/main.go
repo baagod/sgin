@@ -23,9 +23,7 @@ func main() {
 
 	r.GET("/doc", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
 		return "ok"
-	})).Operation(func(op *sgin.Operation) {
-		op.Summary = "Doc Test"
-	})
+	}))
 
 	_ = r.Run(":8080")
 }

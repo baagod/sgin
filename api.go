@@ -11,7 +11,6 @@ import (
 // API 持有 OpenAPI 生成过程中的所有可配置策略
 type API struct {
 	*OpenAPI
-	tagMap map[string]bool
 }
 
 func NewAPI(f ...func(*API)) *API {
@@ -29,7 +28,6 @@ func NewAPI(f ...func(*API)) *API {
 				},
 			},
 		},
-		tagMap: map[string]bool{},
 	}
 
 	if len(f) > 0 {
