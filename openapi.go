@@ -1,4 +1,4 @@
-package oa
+package sgin
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Version = "3.1.1"
+const Version = "3.1.2"
 
 var (
 	pathRegex = regexp.MustCompile(`([:*])([^/]+)`)
@@ -55,13 +55,13 @@ type PathItem struct {
 }
 
 type Operation struct {
-	Summary     string               `yaml:"summary,omitempty"`
-	Description string               `yaml:"description,omitempty"`
-	Parameters  []*Param             `yaml:"parameters,omitempty"`
-	RequestBody *RequestBody         `yaml:"requestBody,omitempty"`
-	Responses   map[string]*Response `yaml:"responses,omitempty"`
-	Security    []Requirement        `yaml:"security,omitempty"`
-	Tags        []string             `yaml:"tags,omitempty"`
+	Summary     string                   `yaml:"summary,omitempty"`
+	Description string                   `yaml:"description,omitempty"`
+	Parameters  []*Param                 `yaml:"parameters,omitempty"`
+	RequestBody *RequestBody             `yaml:"requestBody,omitempty"`
+	Responses   map[string]*ResponseBody `yaml:"responses,omitempty"`
+	Security    []Requirement            `yaml:"security,omitempty"`
+	Tags        []string                 `yaml:"tags,omitempty"`
 }
 
 type Param struct {
@@ -80,7 +80,7 @@ type RequestBody struct {
 	Required    bool                  `yaml:"required,omitempty"`
 }
 
-type Response struct {
+type ResponseBody struct {
 	Ref         string                `yaml:"$ref,omitempty"`
 	Description string                `yaml:"description,omitempty"`
 	Headers     map[string]*Param     `yaml:"headers,omitempty"`
@@ -92,8 +92,17 @@ type MediaType struct {
 }
 
 type Components struct {
-	Schemas         map[string]*Schema         `yaml:"schemas,omitempty"`
+	Schemas         *Registry                  `yaml:"schemas,omitempty"`
 	SecuritySchemes map[string]*SecurityScheme `yaml:"securitySchemes,omitempty"`
+}
+
+type SecurityScheme struct {
+	Type         string `yaml:"type"` // "http", "apiKey", "oauth2"
+	Description  string `yaml:"description,omitempty"`
+	Name         string `yaml:"name,omitempty"`         // Header name for apiKey
+	In           string `yaml:"in,omitempty"`           // "header" for apiKey
+	Scheme       string `yaml:"scheme,omitempty"`       // "bearer" (for HTTP)
+	BearerFormat string `yaml:"bearerFormat,omitempty"` // "JWT" (for bearer)
 }
 
 // YAML 返回 YAML 格式的 OpenAPI 规范

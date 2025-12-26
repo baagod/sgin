@@ -57,7 +57,7 @@ func SupportedLanguages() []language.Tag {
 }
 
 // useTranslator 根据语言标签创建多语言核心组件
-func useTranslator(e *Engine) (handler func(*Ctx) error) {
+func useTranslator(e *Engine) (h Handler) {
 	tags := e.cfg.Locales
 	if len(tags) == 0 {
 		return
@@ -113,7 +113,7 @@ func useTranslator(e *Engine) (handler func(*Ctx) error) {
 	e.defaultLang = supportedTags[0]
 	e.languageMatcher = language.NewMatcher(supportedTags)
 
-	return func(c *Ctx) error {
+	return Hn(func(c *Ctx) error {
 		// 1. 优先检查查询参数 ?lang=zh-CN
 		if lang := c.ctx.Query("lang"); lang != "" {
 			if tag, err := language.Parse(lang); err == nil {
@@ -136,5 +136,5 @@ func useTranslator(e *Engine) (handler func(*Ctx) error) {
 
 		c.locale(c.engine.defaultLang)
 		return c.Next()
-	}
+	})
 }

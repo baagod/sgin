@@ -10,8 +10,8 @@ import (
 )
 
 // Logger 返回一个 Gin 中间件，用于打印结构化的 JSON 请求日志。
-func Logger(c *Ctx) {
-	gc := c.ctx // *gin.Context
+var Logger = Hn(func(c *Ctx) error {
+	gc := c.Gin() // *gin.Context
 
 	// Start timer
 	start := time.Now()
@@ -61,8 +61,9 @@ func Logger(c *Ctx) {
 		_ = enc.Encode(logMap)
 
 		fn(c, msg, sb.String())
-		return
+		return c.Next()
 	}
 
 	fmt.Println(msg)
-}
+	return c.Next()
+})

@@ -5,11 +5,12 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/baagod/sgin/oa"
 	"github.com/gin-gonic/gin"
 	ut "github.com/go-playground/universal-translator"
 	"golang.org/x/text/language"
 )
+
+const EngineKey = "_baa/sgin/engine"
 
 type Engine struct {
 	Router
@@ -26,7 +27,7 @@ type Config struct {
 	Recovery       func(c *Ctx, out, s string) // 回调 [带颜色的输出] 和 [结构化日志]
 	ErrorHandler   func(c *Ctx, err error) error
 	Logger         func(c *Ctx, out string, s string) // 回调 [纯文本] 和 [JSON] 日志
-	OpenAPI        *oa.Config
+	OpenAPI        *API
 	Locales        []language.Tag // 绑定验证错误所使用的多语言支持
 }
 
@@ -54,11 +55,14 @@ func New(config ...Config) *Engine {
 		e:    e,
 		base: "/",
 		api:  cfg.OpenAPI,
-		op: oa.Operation{
-			Responses: map[string]*oa.Response{},
-			Security:  []oa.Requirement{{}},
-		},
+		op:   Operation{Responses: map[string]*ResponseBody{}},
 	}
+
+	// 注册 Engine 注入中间件 (必须在最前)
+	e.Use(func(c *gin.Context) {
+		c.Set(EngineKey, e)
+		c.Next()
+	})
 
 	e.Use(Recovery, Logger) // 注册 [恢复] 和 [日志] 中间件
 	if tr := useTranslator(e); tr != nil {
@@ -72,19 +76,24 @@ func New(config ...Config) *Engine {
 
 	// OpenAPI 文档中间件
 	if cfg.OpenAPI != nil && cfg.Mode != gin.ReleaseMode {
-		e.GET("/openapi.yaml", func(c *Ctx) error {
+		e.GET("/openapi.yaml", Hn(func(c *Ctx) error {
 			if specYAML, err := cfg.OpenAPI.YAML(); err == nil {
 				return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
 			}
 			return c.Send(ErrInternalServerError())
-		})
+		}))
 
-		e.GET("/docs", func(c *Ctx) error {
-			return c.Content(MIMETextHTMLUTF8).Send(oa.DocsHTML)
-		})
+		e.GET("/docs", Hn(func(c *Ctx) error {
+			return c.Content(MIMETextHTMLUTF8).Send(DocsHTML)
+		}))
 	}
 
 	return e
+}
+
+// Routes 返回注册的路由切片，包括一些有用信息，如 HTTP 方法、路径和处理器名称。
+func (e *Engine) Routes() gin.RoutesInfo {
+	return e.engine.Routes()
 }
 
 // Run 将路由器连接到 http.Server 并开始监听和提供 HTTP[S] 请求

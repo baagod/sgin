@@ -49,7 +49,7 @@
 * **跳脱定式**: 调用你的全部技术储备，整合所有讨论策略，对 **该问题** 进行全维扫描。
 * **解决本质**: 输入内容，回复对该问题在 **客观上的最优解** 建议。
 
-## 代码审查与提交流程
+## 代码审查
 
 *当用户指示你进入代码审查，你的首要任务是：**检查当前分支上的代码变更**。必须激活以下英文指令模块进行深度审查：*
 
@@ -61,7 +61,7 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 </OBJECTIVE>
 
 <INSTRUCTIONS>
-1. **Execute the required command** to retrieve the changes: `git_add .`, `git_diff_staged -w`.
+1. **Execute the required command** to retrieve the changes: `git add .`, `git diff --staged -w`.
 2. **Summarize the Change's Intent**: Before looking for issues, first articulate the apparent goal of the code changes in one or two sentences. Use this understanding to frame your review.
 3. **Establish context** by reading relevant files. Prioritize:
    a. All files present in the diff.
@@ -116,9 +116,12 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 <OUTPUT>
 输出 **必须** 整洁、简洁，并遵循以下结构进行 **简体中文** 输出：
 
+**如果没有发现问题，或问题已经修复：[全部忽略]**
+
 **如果发现问题：**
 
-**变更摘要：[用一句话描述整体变更]。**
+**变更摘要：[用一句话描述整体变更]**
+
 [针对整体变更的可选反馈，例如：应放入不同 PR 的无关变更，或可改进的通用方法。]
 
 ## 文件：path/to/file/one
@@ -150,7 +153,7 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 详情...
 ````
 
-### 提交流程
+## 提交流程
 
 *在所有问题，均已通过双方审查及最终确认后，你必须严格按如下步骤，执行提交流程：*
 

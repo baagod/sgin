@@ -266,22 +266,15 @@ func (c *Ctx) locale(tag ...language.Tag) language.Tag {
 	return lang
 }
 
-// send 消费内部归一化的响应结果
-func (c *Ctx) send(r *result) {
-	// 1. 处理状态码 (如果有显式设置)
-	if r.Status > 0 {
-		c.Status(r.Status)
-	}
-
-	// 2. 先处理错误
-	if r.Err != nil {
-		_ = c.engine.cfg.ErrorHandler(c, r.Err)
+// send 发送响应结果
+func (c *Ctx) send(data any, err error) {
+	if err != nil { // 先处理错误
+		_ = c.engine.cfg.ErrorHandler(c, err)
 		return
 	}
 
-	// 3. 发送数据
-	if r.Data != nil {
-		_ = c.Send(r.Data)
+	if data != nil {
+		_ = c.Send(data) // 发送数据
 	}
 }
 

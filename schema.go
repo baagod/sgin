@@ -1,13 +1,11 @@
-package oa
+package sgin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/netip"
 	"net/url"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/baagod/sgin/helper"
@@ -49,10 +47,11 @@ type Schema struct {
 }
 
 func (s *Schema) MarshalYAML() (any, error) {
-	if s.Nullable {
-		s.Type = []any{s.Type, "null"}
+	tmp := *s
+	if tmp.Type != nil && tmp.Type != "" && tmp.Nullable {
+		tmp.Type = []any{s.Type, "null"}
 	}
-	return s, nil
+	return tmp, nil // 返回指针会有递归错误
 }
 
 // fieldInfo 用于存储字段的详细信息，包括其直接父级类型。
@@ -103,33 +102,4 @@ func getFields(t reflect.Type, callback func(info fieldInfo)) {
 			callback(fieldInfo{Parent: currentTyp, Field: f})
 		}
 	}
-}
-
-// parseTagValue 根据字段的 Schema 类型，将从 tag 读取的字符串值解析为正确的 Go 类型。
-// 例如，对于一个 integer 字段，它会将 "123" 解析为数字 123。
-func parseTagValue(value, fieldname string, s *Schema) any {
-	// 1. 如果基础类型是 string，直接返回原始值，无需解析。
-	if s.Type == TypeString {
-		return value
-	}
-
-	// 特殊情况：字符串数组，带有逗号分隔且无引号。
-	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
-		values := make([]string, 0)
-		for _, v := range strings.Split(value, ",") {
-			values = append(values, strings.TrimSpace(v))
-		}
-		return values
-	}
-
-	// 2. 对于所有其他类型，尝试使用 JSON 解码器进行解析
-	var result any
-	value = strings.TrimSpace(value)
-	err := json.Unmarshal([]byte(value), &result)
-	if err != nil {
-		// 返回错误，以便调用者可以决定如何处理（例如，忽略无效的 tag 值）
-		panic(fmt.Errorf("invalid %s tag value '%s' for field '%s': %w", s.Type, value, fieldname, err))
-	}
-
-	return result
 }

@@ -1,57 +1,96 @@
 package sgin
 
 import (
-	"reflect"
+	"fmt"
+
+	"github.com/spf13/cast"
 )
 
-// result 是内部使用的统一响应结构体
-// 它负责将各种 Handler 的返回值归一化，以便统一处理
-type result struct {
-	Status int   // HTTP 状态码，0 表示未设置
-	Data   any   // 响应数据
-	Err    error // 错误
+type Result struct {
+	Event   string `json:"event"`  // 事件标识
+	Status  int    `json:"status"` // 自定义状态码，经常用于定义请求成功或失败等错误状态 (非 HTTP 状态码)
+	Code    int    `json:"code"`   // 自定义代码，经常与 Status 关联。例如: Status=0 时，Code=N。
+	Count   int    `json:"count"`  // 如果 Data 返回列表，可以在这里设置列表长度。
+	Message string `json:"msg"`    // 结果消息
+	Data    any    `json:"data"`   // 结果数据
 }
 
-// convertResult 将反射调用的返回值切片转换为统一的 result 结构
-func convertResult(values []reflect.Value) *result {
-	res := &result{}
-
-	if len(values) == 0 {
-		return res
+func (r *Result) newStatus(status any, code ...any) *Result {
+	st := cast.ToInt(status)
+	if len(code) == 0 {
+		return &Result{Status: st}
 	}
+	return &Result{Status: st, Code: cast.ToInt(code[0])}
+}
 
-	// 获取第一个返回值
-	v1 := values[0].Interface()
-
-	// 单返回值情况
-	if len(values) == 1 {
-		switch v := v1.(type) {
-		case error:
-			res.Err = v // 返回的是 error
-		default:
-			// 如果 Handler 只返回一个int，我们默认它就是数据而不是状态码。
-			// 状态码应该通过 (int, T) 或者 c.Status() 来设置。
-			res.Data = v // 返回的是 T (Data)
-		}
-		return res
+func (r *Result) newOK(data ...any) *Result {
+	if len(data) == 0 {
+		return &Result{Status: 1}
 	}
+	return &Result{Data: data[0], Status: 1}
+}
 
-	// 双返回值情况
-	v2 := values[1].Interface()
-
-	// 情况 A: (int, T) -> Status, Data
-	// 注意：这里假设第一个 int 是状态码
-	if code, ok := v1.(int); ok {
-		res.Status = code
-		res.Data = v2
-		return res
+func (r *Result) NewFailed(data ...any) *Result {
+	if len(data) == 0 {
+		return &Result{}
 	}
+	return &Result{Data: data[0]}
+}
 
-	// 情况 B: (T, error) -> Data, Err
-	// 这是最标准的 Go 风格
-	if res.Data = v1; v2 != nil {
-		res.Err = v2.(error)
+// SetStatus 设置 status, code
+func (r *Result) SetStatus(status any, code ...any) (res *Result) {
+	if res = r; res == nil {
+		res = r.newStatus(status, code...)
+	} else if r.Status = cast.ToInt(status); len(code) > 0 {
+		r.Code = cast.ToInt(code[0])
 	}
+	return res
+}
 
+// SetCode 设置 code
+func (r *Result) SetCode(code any) *Result {
+	if r == nil {
+		return &Result{Code: cast.ToInt(code)}
+	}
+	r.Code = cast.ToInt(code)
+	return r
+}
+
+// SetEvent 设置事件
+func (r *Result) SetEvent(e string) *Result {
+	if r == nil {
+		return &Result{Event: e}
+	}
+	r.Event = e
+	return r
+}
+
+// SetMessage 设置消息
+func (r *Result) SetMessage(format any, a ...any) *Result {
+	m := fmt.Sprintf(fmt.Sprint(format), a...)
+	if r == nil {
+		return &Result{Message: m}
+	}
+	r.Message = m
+	return r
+}
+
+// OK 设置成功 (status=1) 数据
+func (r *Result) OK(data ...any) (res *Result) {
+	if res = r; res == nil {
+		res = r.newOK(data...)
+	} else if r.Status = 1; len(data) > 0 {
+		r.Data = data[0]
+	}
+	return res
+}
+
+// Failed 设置失败 (status=0) 数据
+func (r *Result) Failed(data ...any) (res *Result) {
+	if res = r; res == nil {
+		res = r.NewFailed(data...)
+	} else if r.Status = 0; len(data) > 0 {
+		r.Data = data[0]
+	}
 	return res
 }
