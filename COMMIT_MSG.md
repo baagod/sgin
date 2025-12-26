@@ -1,9 +1,7 @@
-refactor(oa): 重构 Schema 注册机制并优化 OpenAPI 命名与转换逻辑
+feat(core): 重构 OpenAPI 架构并迁移至 sgin 包
 
-- 引入 `Registry` 注册表，采用“先占位后填充”策略解决结构体递归引用导致的死循环问题。
-- 升级 `DefaultSchemaNamer`：支持自动识别并修剪主模块及 `main` 包路径前缀，移除冗余后缀。
-- 增强 `helper.Convert`：引入 `ConvertibleTo` 性能优化，统一多级指针与切片递归转换路径。
-- 优化 OpenAPI 规范适配：引入基于 `omitempty` 的智能可空性推断，修复序列化副作用。
-- 改进工具函数：重构 `UpperFirst` 以支持 UTF-8 安全处理，新增注册表单元测试。
-
-此次变更显著提升了文档生成的精准度与系统健壮性，使生成的 Schema 命名更符合业务直觉。
+- 将 OpenAPI 子包迁移至 sgin 根目录，消除循环引用
+- 重构 Handler 系统，从基于反射的动态适配器改为泛型强类型处理器（H/Ho/Hn）
+- 新增 HandleMeta 管理元数据，使用局部 map + 立即清理机制
+- 路由注册改为只接受单个 Handler，强制区分中间件和处理函数
+- 移除 unsafe 操作和全局 handlers map，提升类型安全性

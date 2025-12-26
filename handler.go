@@ -2,130 +2,133 @@ package sgin
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
-type Handler any // gin.HandlerFunc, func(*sgin.Ctx[, Input]) T | (T, error)
+var (
+	hMeta      HandleMeta
+	structType = reflect.TypeOf(struct{}{})
+)
 
-// ginHandlers 是核心适配器，负责将用户传入的任意 Handler 转换为 Gin 的 HandlerFunc
-func ginHandlers(e *Engine, a ...Handler) (handlers []gin.HandlerFunc) {
-	for _, f := range a {
-		if f == nil {
-			continue
-		}
-		// 1. 优先识别 Gin 原生 Handler
-		switch ginHandler := f.(type) {
-		case gin.HandlerFunc:
-			handlers = append(handlers, ginHandler)
-			continue
-		case func(*gin.Context):
-			handlers = append(handlers, ginHandler)
-			continue
-		}
-
-		// 2. 智能反射适配器
-		handler := reflect.ValueOf(f)
-		h := handler.Type()
-
-		// --- 启动时自检 (Fail Fast) ---
-		if h.Kind() != reflect.Func {
-			panic(fmt.Sprintf("Handler must be a function, got %T", f))
-		}
-
-		numIn := h.NumIn()
-		if numIn < 1 || numIn > 2 {
-			panic(fmt.Sprintf("Handler accepts 1 or 2 arguments, got %d. Function: %T", numIn, f))
-		}
-
-		// 检查第一个参数必须是 *sgin.Ctx
-		if h.In(0) != reflect.TypeOf(&Ctx{}) {
-			panic(fmt.Sprintf("Handler's first argument must be *sgin.Ctx. Function: %T", f))
-		}
-
-		// 预先计算是否有第二个参数（请求结构体）
-		in, isPtr := reflect.Type(nil), false
-		if numIn == 2 {
-			in = h.In(1) // 允许是指针或结构体
-			if isPtr = in.Kind() == reflect.Ptr; isPtr {
-				in = in.Elem()
-			}
-		}
-
-		handlers = append(handlers, func(gc *gin.Context) {
-			// 获取或创建 sgin.Ctx
-			c, _ := gc.Keys[CtxKey].(*Ctx)
-			if c == nil {
-				c = newCtx(gc, e)
-				gc.Set(CtxKey, c)
-			}
-
-			// 准备参数列表
-			args := make([]reflect.Value, numIn)
-			args[0] = reflect.ValueOf(c)
-
-			// 如果有请求参数，执行智能绑定
-			if numIn == 2 {
-				val, err := bindV2(c, in, isPtr)
-				if err != nil { // 绑定失败，统一处理错误
-					gc.Abort()
-					_ = e.cfg.ErrorHandler(c, ErrBadRequest(err.Error()))
-					return
-				}
-				args[1] = val
-			}
-
-			// 结果归一化并发送
-			c.send(convertResult(handler.Call(args)))
-		})
-	}
-
-	return
+type HandleArg struct {
+	In, Out reflect.Type
 }
 
-// bindV2 实现了 V2 架构的智能复合绑定
-func bindV2(c *Ctx, in reflect.Type, isPtr bool) (_ reflect.Value, err error) {
-	gc := c.ctx
+type HandleMeta struct {
+	m sync.Map
+}
 
-	// 创建一个新的结构体实例
-	valPtr := reflect.New(in) // valPtr 是指向该结构体的指针 (例如 *UserReq)
-	ptr := valPtr.Interface()
+func (m *HandleMeta) Get(h Handler) (*HandleArg, bool) {
+	if v, ok := m.m.Load(h); ok {
+		return v.(*HandleArg), true
+	}
+	return nil, false
+}
 
-	// 绑定 URI, Header, Query 和 Body 参数，忽略效验错误。
-	if err = tryBind(gc.ShouldBindUri, ptr); err == nil {
-		if err = tryBind(gc.ShouldBindHeader, ptr); err == nil {
-			err = tryBind(gc.ShouldBind, ptr)
-		}
+func (m *HandleMeta) Set(h Handler, meta *HandleArg) {
+	m.m.Store(h, meta)
+}
+
+func (m *HandleMeta) Delete(h Handler) {
+	m.m.Delete(h)
+}
+
+type Handler = gin.HandlerFunc
+
+// H 创建一个带有 [输入] 和 [输出] 的强类型处理器 (支持 OpenAPI)
+func H[I any, R any](f func(*Ctx, I) (R, error)) Handler {
+	// 预先计算类型
+	tIn := reflect.TypeOf((*I)(nil)).Elem()
+	ptrIn := tIn.Kind() == reflect.Ptr
+	if ptrIn { // 如果传递指针，会变成 **I，需要再次解引用。
+		tIn = tIn.Elem()
 	}
 
-	if err != nil {
-		return
+	tOut := reflect.TypeOf((*R)(nil)).Elem() // 同上
+	if tOut.Kind() == reflect.Ptr {
+		tOut = tOut.Elem()
+	}
+
+	// 构造原生 Gin 闭包
+	h := func(gc *gin.Context) {
+		e := gc.MustGet(EngineKey).(*Engine)
+		c, _ := gc.Keys[CtxKey].(*Ctx)
+
+		if c == nil {
+			c = newCtx(gc, e)
+			gc.Set(CtxKey, c)
+		}
+
+		var in I               // 初始化输入参数。注意，如果 I 是指针结构体，这里是 nil。
+		if tIn != structType { // 非空结构体时才绑定参数
+			result, err := bindV3(c, tIn, ptrIn)
+			if err != nil {
+				gc.Abort()
+				_ = e.cfg.ErrorHandler(c, ErrBadRequest(err.Error()))
+				return
+			}
+			in = result.(I)
+		}
+
+		c.send(f(c, in))
+	}
+
+	hMeta.Set(h, &HandleArg{In: tIn, Out: tOut}) // 注册元数据
+	return h
+}
+
+// Ho 创建一个仅有 [输出] 的强类型处理器 (支持 OpenAPI)
+func Ho[I any, R any](f func(*Ctx, I) R) Handler {
+	return H(func(c *Ctx, in I) (R, error) {
+		return f(c, in), nil
+	})
+}
+
+// Hn 创建一个无输入、无输出（仅返回 error）的处理器
+func Hn(f func(*Ctx) error) Handler {
+	return H(func(c *Ctx, _ struct{}) (any, error) {
+		return nil, f(c)
+	})
+}
+
+func bindV3(c *Ctx, t reflect.Type, ptr bool) (_ any, err error) {
+	gc := c.ctx
+	v := reflect.New(t) // v = *in
+	value := v.Interface()
+
+	// 绑定 URI, Header, Query 和 Body 参数，忽略效验错误。
+	for _, f := range []func(any) error{gc.ShouldBindUri, gc.ShouldBindHeader, gc.ShouldBind} {
+		if err = tryBind(f, value); err != nil {
+			return
+		}
 	}
 
 	// 所有数据来源都尝试绑定后，手动触发一次完整校验。
 	// 这是为了捕获之前被 tryBind 忽略的校验错误（如果最终还是缺字段）。
-	if err = binding.Validator.ValidateStruct(ptr); err != nil {
+	if err = binding.Validator.ValidateStruct(value); err != nil {
 		var errs validator.ValidationErrors
-		if errors.As(err, &errs) && len(errs) > 0 {
-			if tr := c.engine.translator; tr != nil {
-				locale := c.locale().String() // 获取当前请求的语言
-				if trans, found := tr.GetTranslator(locale); found {
-					err = errors.New(errs[0].Translate(trans)) // 翻译首个校验错误
-				}
+		if !errors.As(err, &errs) || len(errs) == 0 {
+			return
+		}
+
+		if tr := c.engine.translator; tr != nil {
+			locale := c.locale().String() // 获取当前请求的语言
+			if trans, found := tr.GetTranslator(locale); found {
+				err = errors.New(errs[0].Translate(trans)) // 翻译首个校验错误
 			}
 		}
-		return
 	}
 
-	if isPtr { // 用户要 *t
-		return valPtr, nil // 返回 *t
+	if ptr { // 用户要 *t
+		return v.Interface(), nil
 	}
 
-	return valPtr.Elem(), nil // 否则返回 t
+	return v.Elem().Interface(), nil // 返回 t
 }
 
 // tryBind 执行绑定操作。
