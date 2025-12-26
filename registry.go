@@ -89,6 +89,8 @@ func (r *Registry) Schema(t reflect.Type, hint ...string) *Schema {
 		return &Schema{Type: TypeString, Format: "uri", Nullable: nullable}
 	case ipType, ipAddrType:
 		return &Schema{Type: TypeString, Format: "ipv4", Nullable: nullable}
+	case fileHeaderType:
+		return &Schema{Type: TypeString, Format: "binary"}
 	}
 
 	prefix := t.Name()
@@ -148,13 +150,15 @@ func (r *Registry) Field(f reflect.StructField, hint string) (s *Schema) {
 		s.Default = helper.Convert(f.Type, f.Name, r.DecodeJSON(d, f.Name, s))
 	}
 
-	switch format := f.Tag.Get("format"); format {
-	case "2006-01-02":
-		s.Format = "date"
-	case "15:04:05":
-		s.Format = "time"
-	default:
-		s.Format = format
+	if format := f.Tag.Get("format"); format != "" {
+		switch format {
+		case "2006-01-02":
+			s.Format = "date"
+		case "15:04:05":
+			s.Format = "time"
+		default:
+			s.Format = format
+		}
 	}
 
 	if values := f.Tag.Get("enum"); values != "" {
@@ -190,7 +194,8 @@ func (r *Registry) Field(f reflect.StructField, hint string) (s *Schema) {
 
 func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 	if len(hint) == 0 {
-		hint = append(hint, "")
+		// 如果是匿名结构体，会统一使用 Struct 注册，存在命名冲突，可能需要解决。
+		hint = append(hint, "Struct")
 	}
 
 	name := r.Namer(t, hint[0])
@@ -202,7 +207,7 @@ func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 	}
 
 	// 注册类型以便为递归类型创建 $ref
-	s := &Schema{}
+	s := &Schema{Type: TypeObject}
 	r.schemas[name] = s
 	r.types[name] = t
 	r.registered[t] = true
@@ -240,10 +245,8 @@ func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 		props[field] = fs // 添加到属性
 	})
 
-	s.Type = TypeObject
 	s.Properties = props
 	s.Required = required
-
 	return &Schema{Ref: r.Prefix + name}
 }
 

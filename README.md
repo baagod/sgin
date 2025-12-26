@@ -1,8 +1,16 @@
 # sgin
 
-这是一个 [gin](https://github.com/gin-gonic/gin) 的封装版本，旨在提供更加智能、简洁的 API 开发体验，并且完美兼容原生 `gin`, `gin.HandlerFunc` (包括中间件处理) 。
+`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的**实用主义** Web 框架，旨在提供简洁的 API 开发体验。
 
-它通过增强的 `Handler` 签名、参数绑定、统一的响应处理、错误处理、自动化 OpenAPI 文档生成和多语言校验错误等支持，让开发者专注于业务逻辑。
+它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，**并且兼容原生 `gin`、`gin.HandlerFunc` (包括中间件)**。
+
+## 核心特性
+
+- 🚀 **强类型处理器**: 告别 `c.ShouldBind`，使用泛型包装器 `sgin.H` 自动处理输入输出。
+- 📚 **代码即文档**: 定义好结构体，OpenAPI 3.1 文档自动生成，无需手写 YAML。
+- 🛡️ **统一错误处理**: 内置错误规范与标准化响应封装。
+- 🌍 **国际化支持**: 基于 `langeuge.tag` 的参数校验错误自动翻译。
+- ⚡  **开箱即用**: 内置结构化日志、`Panic` 堆栈追踪、跨域处理等工程化组件。
 
 ## 安装
 
@@ -13,55 +21,70 @@ go get github.com/baagod/sgin
 ## 快速开始
 
 ```go
- r := sgin.New(sgin.Config{})
- 
- r.GET("/", func(c *sgin.Ctx) string {
-     return "Hello sgin!"
- })
- 
- r.Run(":8080")
+package main
+
+import "github.com/baagod/sgin"
+
+type HelloReq struct {
+    Name string `form:"name" binding:"required"` // 自动绑定 Query 或 Form
+}
+
+type HelloResp struct {
+    Msg string `json:"msg"`
+}
+
+func main() {
+   r := sgin.New(sgin.Config{
+     OpenAPI: sgin.NewAPI(), // 启用 OpenAPI 文档生成
+   })
+   
+   // 使用 sgin.Ho (Handler Output-only) 包装器
+   // 自动绑定 HelloReq，并将返回的 HelloResp 序列化为 JSON
+   r.GET("/hello", sgin.Ho(func(c *sgin.Ctx, req HelloReq) HelloResp {
+     return HelloResp{Msg: "Hello " + req.Name}
+   }))
+   
+   // 访问 /docs 查看自动生成的文档
+   r.Run(":8080")
+}
 ```
 
 ## 核心功能
 
-`sgin` 的核心价值在于提供更加智能、简洁的 API 开发体验。以下是你需要了解的核心功能。
+### 泛型处理器
 
-### 智能 Handler 签名
-
-`sgin` 支持多种灵活的 `Handler` 签名，自动处理参数绑定和响应发送。
-
-**支持的签名示例：**
-
-- `func(*gin.Context)`: 兼容 `gin.HandlerFunc`
-- `func(*sgin.Ctx) error`
-- `func(*sgin.Ctx) (any, error)`
-- `func(*sgin.Ctx, input Struct) (any, error)`
-- `func(*sgin.Ctx, input Struct) (any)`
-- `func(*sgin.Ctx, input *Struct)`: 支持绑定指针结构体
-
-### 请求参数绑定
-
-只需在 `Handler` 的第二个参数定义结构体，`sgin` 会自动将其与 `URI`、`Header`、`Query`、`Form` 和 `Body` (JSON/XML) 的数据绑定。如下：
+`sgin` 通过泛型包装器将普通函数转换为 `gin.HandlerFunc`，实现参数的自动绑定与响应的自动处理。
 
 ```go
-type User struct {
-    ID    int    `uri:"id" binding:"required"`
-	Name  string `form:"name" binding:"required" doc:"姓名"`
-    Age   int    `form:"age" default:"18"`
-    Token string `header:"Authorization"`
-}
+// 1. 标准写法：自动绑定 JSON/Form 到 User 结构体
+r.POST("/users", sgin.H(func(c *sgin.Ctx, user User) (User, error) {
+    if err := db.Create(&user); err != nil {
+        return User{}, err // 自动处理错误响应
+    }
+    return user, nil // 自动序列化为 JSON
+}))
 
-r.POST("/users/:id", func(c *sgin.Ctx, p User) (map[string]any, error) {
-    return map[string]any{"id": p.ID, "name": p.Name, "age": p.Age}, nil
-})
+// 2. 仅输出：适合查询类接口
+r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
+    return "v1.0.0"
+}))
+
+// 3. 仅错误：适合文件下载或不返回数据的中间件处理操作
+r.GET("/download", sgin.Hn(func(c *sgin.Ctx) error {
+    c.Send(sgin.BodyFile("report.pdf"))
+    return nil
+}))
 ```
 
-### 统一响应处理
+### 统一响应处理 
 
 `Handler` 的返回值会被自动处理：
 
 - `error`: 调用配置的 `ErrorHandler` 将 `error.Error()` 返回。
 - `data`: 根据请求头 `Accept` 格式化为 `JSON`, `XML` 或 `Text`。
+  - 若 `Accept` 包含 `application/xml` 且不包含 `text/html`，返回 XML。
+  - 若是字符串，返回 `text/plain`。
+  - 其他情况默认返回 `application/json`。
 
 你还可以使用 `c.Send()` 发送指定格式的数据：
 
@@ -73,9 +96,9 @@ c.Send(sgin.ErrBadRequest("bad"))  // 返回指定的错误状态和可选消息
 c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发送数据
 ```
 
-### 增强的 `sgin.Ctx`
+### 增强的 Context
 
-`sgin.Ctx` 封装了 `gin.Context`，提供更便捷 API，以下是所有可用方法的完整指南。
+`sgin.Ctx` 封装了 `gin.Context`，提供了更符合人体工程学的 API：
 
 #### 参数获取
 
@@ -132,32 +155,30 @@ c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发�
 - `New(config ...sgin.Config) *sgin.Engine`: 创建新的 `sgin` 实例，支持可选配置
 - `Run(addr string, certfile ...string) error`: 启动 HTTP(S) 服务器，通过可选参数支持 HTTPS
 - `RunListener(listener net.Listener) error`: 通过指定的监听器启动服务器
+- `Routes() gin.RoutesInfo`: 返回注册的路由信息切片
 - `Gin() *gin.Engine`: 获取底层的 `gin.Engine` 实例 (用于访问原生功能) 。
 
 ## 配置详解
 
-`sgin` 提供了灵活的配置选项，所有配置都在 `sgin.Config` 结构体中设置。以下是所有可用配置的详细说明：
+`sgin` 提供了灵活的配置选项，所有配置都在 `sgin.Config` 结构体中设置。
 
 ### 基础配置
 
 ```go
 r := sgin.New(sgin.Config{
-    // 运行模式，可选: gin.DebugMode, gin.ReleaseMode, gin.TestMode。
-    Mode: gin.ReleaseMode,
+    // 运行模式
+    Mode: sgin.ReleaseMode,
     
     // 受信任的代理IP列表，用于获取真实客户端IP。
     TrustedProxies: []string{"192.168.1.0/24"},
-    
-    // 自定义错误处理器
+
+    // 错误处理：统一拦截所有 Handler 返回的 error
     ErrorHandler: func(c *sgin.Ctx, err error) error {
-        return c.Status(500).Send(map[string]any{
-            "error": err.Error(),
-            "code":  500,
-        })
+        return c.Status(500).Send(map[string]any{"msg": err.Error()})
     },
     
-    // 自定义日志处理器
-    // out: 控制台友好格式，stru: 结构化JSON格式
+	// 自定义日志处理器
+    // out: 控制台友好格式，stru: 结构化 JSON 格式
     // 返回 true 继续输出默认日志，false 拦截日志输出
     Logger: func(c *sgin.Ctx, out, stru string) bool {
         fmt.Print(out) // 控制台日志
@@ -318,44 +339,42 @@ type LoginReq struct {
 
 可通过 `sgin.SupportedLanguages()` 函数获取受支持的语言列表。
 
-### OpenAPI 配置（测试）
+### OpenAPI 文档自动生成
 
-`sgin` 可以通过分析 `Handler` 的输入输出结构体，自动生成 OpenAPI 3.1 文档。启用后，框架会自动生成规范文件和交互式文档页面：
+无需额外配置，`sgin` 会分析你的 Handler 输入输出结构体，自动生成 OpenAPI 3.1 规范。
+
+**配置文档信息：**
 
 ```go
-import "github.com/baagod/sgin/oa"
-
 r := sgin.New(sgin.Config{
-    OpenAPI: oa.New(func(c *oa.Config) {
-		c.Title = "我的 API"
-		c.Description = "这是一个示例API",
-        c.Version ="1.0.0",
-    })
+    OpenAPI: sgin.NewAPI(func(api *sgin.API) {
+        api.Title = "订单系统 API"
+        api.Version = "1.0.0"
+    }),
 })
 ```
 
-在路由定义的第一个参数传入 `func(*oa.Operation)` 来补充文档信息。
+**路由级文档配置：**
+
+在注册路由时，传入 `func(*sgin.Operation)` 即可补充接口描述：
 
 ```go
-import "github.com/baagod/sgin/oa"
-
-type LoginReq struct {
-    Username string `json:"username" doc:"用户名"` // doc: OpenAPI 字段描述
-    Password string `json:"password" doc:"密码"`
-}
-
-// 注册路由时添加文档描述
-r.POST("/login", func(op *oa.Operation) {
-    op.Summary = "用户登录"
-    op.Tags = []string{"Auth"}
-    op.Description = "用户登录接口，返回认证令牌"
-}, func(c *sgin.Ctx, req LoginReq) (string, error) {
-    // 业务逻辑...
-    return "token-xxx", nil
-})
+r.POST("/orders", 
+    sgin.H(CreateOrderHandler), 
+    func(op *sgin.Operation) {
+        op.Summary = "创建订单"
+        op.Description = "创建一个新的电商订单，需要验证库存。"
+        op.Tags = []string{"Order"}
+    },
+)
 ```
 
-启动后访问以下URL查看生成的文档：
+启动后访问 `/docs` 即可查看漂亮风格的交互式文档。
 
-- `/openapi.yaml` - OpenAPI 规范文件
-- `/docs` - 交互式API文档页面
+## 贡献
+
+欢迎提交 Issue 和 PR！
+
+## 许可证
+
+MIT

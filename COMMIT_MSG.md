@@ -1,6 +1,6 @@
-docs(openapi): 优化 OpenAPI 生成逻辑并完善中文注释
+docs: 更新 README.md，强调泛型特性并补全统一响应说明
 
-1. 逻辑文档化：为 `api.go` 中的核心解析函数（Register, parseRequestParams 等）添加了详尽的中文注释，明确了标签映射与解析流程。
-2. 标签处理优化：增强了 `form` 标签在 OpenAPI query 参数中的映射逻辑，并实现了标签向顶层 `OpenAPI.Tags` 的自动同步。
-3. 智能响应注入：改进 `parseResponseBody` 逻辑，仅在未定义 200 响应时自动注入，支持多状态码共存。
-4. 示例与辅助：更新 `example/main.go` 以适配最新的路由配置接口；在 `openapi.go` 中新增 `Schema` 辅助方法并统一接收者命名。
+- **核心重构**：重写 "快速开始" 与 "泛型处理器" 章节，明确展示 `sgin.H/Ho/Hn` 泛型包装器的用法。
+- **兼容性声明**：在简介中明确添加 "完美兼容原生 gin、gin.HandlerFunc (包括中间件处理)"。
+- **特性补全**：新增 "统一响应处理" 章节，详细说明 `Accept` 头协商逻辑 (JSON/XML/Text)。
+- **文档整合**：保留并整合了详细的 Context API 列表、工程化配置说明及 Panic 堆栈日志示例。

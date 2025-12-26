@@ -2,6 +2,7 @@ package sgin
 
 import (
 	"encoding/json"
+	"mime/multipart"
 	"net"
 	"net/netip"
 	"net/url"
@@ -28,6 +29,7 @@ var (
 	ipAddrType     = reflect.TypeOf(netip.Addr{})
 	urlType        = reflect.TypeOf(url.URL{})
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
+	fileHeaderType = reflect.TypeOf(multipart.FileHeader{})
 )
 
 type Schema struct {

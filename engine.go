@@ -91,7 +91,7 @@ func New(config ...Config) *Engine {
 	return e
 }
 
-// Routes 返回注册的路由切片，包括一些有用信息，如 HTTP 方法、路径和处理器名称。
+// Routes 返回注册的路由信息切片
 func (e *Engine) Routes() gin.RoutesInfo {
 	return e.engine.Routes()
 }

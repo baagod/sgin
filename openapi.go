@@ -2,7 +2,6 @@ package sgin
 
 import (
 	"bytes"
-	"reflect"
 	"regexp"
 
 	"gopkg.in/yaml.v3"
@@ -45,16 +44,15 @@ type PathItem struct {
 	Summary     string `yaml:"summary,omitempty"`
 	Description string `yaml:"description,omitempty"`
 
-	Get     *Operation `yaml:"get,omitempty"`
-	Put     *Operation `yaml:"put,omitempty"`
-	Post    *Operation `yaml:"post,omitempty"`
-	Delete  *Operation `yaml:"delete,omitempty"`
-	Options *Operation `yaml:"options,omitempty"`
-	Head    *Operation `yaml:"head,omitempty"`
-	Patch   *Operation `yaml:"patch,omitempty"`
-	Trace   *Operation `yaml:"trace,omitempty"`
-
-	Parameters []*Param `yaml:"parameters,omitempty"`
+	Get        *Operation `yaml:"get,omitempty"`
+	Put        *Operation `yaml:"put,omitempty"`
+	Post       *Operation `yaml:"post,omitempty"`
+	Delete     *Operation `yaml:"delete,omitempty"`
+	Options    *Operation `yaml:"options,omitempty"`
+	Head       *Operation `yaml:"head,omitempty"`
+	Patch      *Operation `yaml:"patch,omitempty"`
+	Trace      *Operation `yaml:"trace,omitempty"`
+	Parameters []*Param   `yaml:"parameters,omitempty"`
 }
 
 type Operation struct {
@@ -120,10 +118,6 @@ func (a *OpenAPI) YAML() ([]byte, error) {
 
 	_ = enc.Close()
 	return buf.Bytes(), nil
-}
-
-func (a *OpenAPI) Schema(t reflect.Type) *Schema {
-	return a.Components.Schemas.Schema(t)
 }
 
 // Clone 返回一份深度的 Operation 副本

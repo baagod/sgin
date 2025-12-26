@@ -8,6 +8,15 @@ import (
 	"github.com/baagod/sgin/helper"
 )
 
+// isFileType 检查类型是否为文件上传类型 (*multipart.FileHeader 或 []*multipart.FileHeader)
+func isFileType(t reflect.Type) bool {
+	t = helper.DeRef(t)
+	if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		t = helper.DeRef(t.Elem())
+	}
+	return t == fileHeaderType
+}
+
 // API 持有 OpenAPI 生成过程中的所有可配置策略
 type API struct {
 	*OpenAPI
@@ -38,8 +47,20 @@ func NewAPI(f ...func(*API)) *API {
 	return c
 }
 
+func (a *API) Schema(t reflect.Type, hint ...string) *Schema {
+	return a.Components.Schemas.Schema(t, hint...)
+}
+
+func (a *API) Struct(t reflect.Type, hint ...string) *Schema {
+	return a.Components.Schemas.Struct(t, hint...)
+}
+
+func (a *API) Field(f reflect.StructField, hint string) (s *Schema) {
+	return a.Components.Schemas.Field(f, hint)
+}
+
 // Register 将处理器的元数据 (输入/输出类型) 注册到指定的 Operation 中
-func (c *API) Register(op *Operation, path, method string, arg *HandleArg) {
+func (a *API) Register(op *Operation, path, method string, arg *HandleArg) {
 	if arg == nil {
 		return
 	}
@@ -49,85 +70,110 @@ func (c *API) Register(op *Operation, path, method string, arg *HandleArg) {
 		op.Responses = map[string]*ResponseBody{}
 	}
 
-	c.parseRequestParams(op, arg.In)      // 解析结构体标签并映射为请求参数或 RequestBody
-	c.parseResponseBody(op, arg.Out)      // 解析返回类型并映射为 ResponseBody
-	c.registerOperation(op, path, method) // 将配置好的 Operation 绑定到 OpenAPI 路径树中
+	a.parseRequestParams(op, arg.In)      // 解析结构体标签并映射为请求参数或 RequestBody
+	a.parseResponseBody(op, arg.Out)      // 解析返回类型并映射为 ResponseBody
+	a.registerOperation(op, path, method) // 将配置好的 Operation 绑定到 OpenAPI 路径树中
 }
 
-// parseRequestParams 解析输入结构体的标签 (uri, form, header, json)，并映射为 OpenAPI 的参数或请求体。
-func (c *API) parseRequestParams(op *Operation, t reflect.Type) {
+// parseRequestParams 解析输入标签 (uri, form, header, json) 并映射为 OpenAPI 的参数或请求体
+func (a *API) parseRequestParams(op *Operation, t reflect.Type) {
 	t = helper.DeRef(t)
 	if t.Kind() != reflect.Struct {
 		return
 	}
 
-	var jsonFields []reflect.StructField // 用于收集映射到 JSON Body 的字段
+	var body []reflect.StructField // 用于收集映射到 RequestBody 的字段
+	mime := MIMEJSON               // 默认媒体类型
 
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
-		desc := f.Tag.Get("doc")                                       // 从 doc 标签获取字段描述
-		required := strings.Contains(f.Tag.Get("binding"), "required") // 检查是否标记为必填
+		desc := f.Tag.Get("doc")                                       // 获取描述
+		required := strings.Contains(f.Tag.Get("binding"), "required") // 检查是否必填
 
 		// 1. 处理路径参数 (uri 标签) -> 映射至 OpenAPI path 参数
 		if tag := f.Tag.Get("uri"); tag != "" {
-			// 根据 OpenAPI 规范，路径参数必须是必填的 (required: true)
-			c.addParam(op, tag, "path", desc, true, f.Type)
+			a.addParam(op, tag, "path", desc, true, f.Type)
 			continue
 		}
 
-		// 2. 处理查询参数 (form 标签) -> 映射至 OpenAPI query 参数
-		// Gin 的 form 标签同时支持 URL 查询字符串和表单 Body，此处统一映射为 query
+		// 2. 处理查询参数 (form 标签)
+		// form 标签始终映射为 Query 参数，除非它是文件类型。
 		if tag := f.Tag.Get("form"); tag != "" {
-			c.addParam(op, tag, "query", desc, required, f.Type)
+			if isFileType(f.Type) {
+				body = append(body, f)
+				mime = MIMEMultipartForm
+			} else {
+				a.addParam(op, tag, "query", desc, required, f.Type)
+			}
 			continue
 		}
 
 		// 3. 处理请求头参数 (header 标签) -> 映射至 OpenAPI header 参数
 		if tag := f.Tag.Get("header"); tag != "" {
-			c.addParam(op, tag, "header", desc, required, f.Type)
+			a.addParam(op, tag, "header", desc, required, f.Type)
 			continue
 		}
 
 		// 4. 收集正体字段 (json 标签)
-		// 如果字段标记为 json:"-" 则跳过，否则即使没有标签，默认也会作为 JSON Body 的一部分
-		if f.Tag.Get("json") != "-" {
-			jsonFields = append(jsonFields, f)
+		if tag := f.Tag.Get("json"); tag != "-" {
+			if isFileType(f.Type) && mime != MIMEMultipartForm {
+				mime = MIMEMultipartForm
+			}
+			body = append(body, f)
 		}
 	}
 
-	// 如果没有发现任何 Body 字段，则不生成 RequestBody
-	if len(jsonFields) == 0 {
+	if len(body) == 0 {
 		return
 	}
 
-	// 利用反射动态构造一个匿名结构体，代表最终的 JSON 请求体结构
-	schema := c.Components.Schemas.Schema(reflect.StructOf(jsonFields))
-	if schema == nil {
-		return
+	// 手动构建 RequestBody 的 Properties，
+	// 以保留字段级别的元数据 (如 format, doc, default, enum)。
+	var required []string
+	props := map[string]*Schema{}
+
+	for _, f := range body {
+		name := f.Name
+		if mime == MIMEMultipartForm {
+			name = f.Tag.Get("form")
+		} else {
+			if name = strings.Split(f.Tag.Get("json"), ",")[0]; name == "-" {
+				name = f.Tag.Get("form")
+			}
+		}
+
+		if fs := a.Field(f, t.Name()+f.Name); fs != nil {
+			props[name] = fs
+			if strings.Contains(f.Tag.Get("binding"), "required") {
+				required = append(required, name)
+			}
+		}
 	}
 
-	// 设置 Operation 的请求体信息
+	// 注入到 Operation 的 RequestBody 中
 	op.RequestBody = &RequestBody{
 		Content: map[string]*MediaType{
-			"application/json": {Schema: schema},
+			mime: {
+				Schema: &Schema{Type: TypeObject, Properties: props, Required: required},
+			},
 		},
-		Required: len(schema.Required) > 0, // 如果 Schema 中有必填项，则 RequestBody 也是必填的
+		Required: len(required) > 0,
 	}
 }
 
 // addParam 辅助方法：向 Operation 中添加一个新的参数描述 (path, query, header 等)
-func (c *API) addParam(op *Operation, name, in, desc string, required bool, t reflect.Type) {
+func (a *API) addParam(op *Operation, name, in, desc string, required bool, t reflect.Type) {
 	op.Parameters = append(op.Parameters, &Param{
 		Name:        name,
 		In:          in,
 		Required:    required,
 		Description: desc,
-		Schema:      c.Schema(t), // 自动解析类型对应的 JSON Schema
+		Schema:      a.Schema(t), // 自动解析类型对应的 JSON Schema
 	})
 }
 
 // parseResponseBody 解析处理器的返回值类型，并根据需要自动注入默认的 200 响应。
-func (c *API) parseResponseBody(op *Operation, t reflect.Type) {
+func (a *API) parseResponseBody(op *Operation, t reflect.Type) {
 	// 仅当用户未在路由定义中显式通过 AddOperation 自定义 200 响应时，才执行自动注入。
 	if _, ok := op.Responses["200"]; ok {
 		return
@@ -141,25 +187,23 @@ func (c *API) parseResponseBody(op *Operation, t reflect.Type) {
 
 	// 否则，解析返回类型并生成 application/json 响应
 	op.Responses["200"] = &ResponseBody{
-		Content: map[string]*MediaType{
-			"application/json": {Schema: c.Schema(t)},
-		},
+		Content: map[string]*MediaType{MIMEJSON: {Schema: a.Schema(t)}},
 	}
 }
 
-// registerOperation 将 Operation 注册到 OpenAPI 的 Paths 映射中，并执行标签同步
-func (c *API) registerOperation(op *Operation, path, method string) {
+// registerOperation 将 op 注册到 OpenAPI 的 Paths 映射并执行标签同步
+func (a *API) registerOperation(op *Operation, path, method string) {
 	method = strings.ToUpper(method)
 	// 将 Gin 风格的 :param 或 *param 转换为 OpenAPI 风格的 {param}
 	p := pathRegex.ReplaceAllString(path, "{$2}")
 
 	// 初始化路径项
-	if _, ok := c.Paths[p]; !ok {
-		c.Paths[p] = &PathItem{}
+	if _, ok := a.Paths[p]; !ok {
+		a.Paths[p] = &PathItem{}
 	}
 
 	// 根据 HTTP 方法将 Operation 挂载到对应的路径项上
-	switch item := c.Paths[p]; method {
+	switch item := a.Paths[p]; method {
 	case http.MethodGet:
 		item.Get = op
 	case http.MethodHead:
@@ -178,16 +222,15 @@ func (c *API) registerOperation(op *Operation, path, method string) {
 		item.Trace = op
 	}
 
-	// 标签同步逻辑：确保 Operation 中使用的所有标签都在 OpenAPI 根对象的 tags 列表中声明。
-	// 这有助于 UI 文档工具 (如 Swagger UI) 正确显示和分类接口。
-	if c.tagMap == nil {
-		c.tagMap = map[string]bool{}
+	// 标签同步逻辑：确保 Operation 中使用的所有标签都在 OpenAPI 根对象的 tags 列表中
+	if a.tagMap == nil {
+		a.tagMap = map[string]bool{}
 	}
 
 	for _, tag := range op.Tags {
-		if !c.tagMap[tag] {
-			c.tagMap[tag] = true
-			c.Tags = append(c.Tags, &Tag{Name: tag}) // 发现新标签，同步到全局 tags 声明。
+		if !a.tagMap[tag] {
+			a.tagMap[tag] = true
+			a.Tags = append(a.Tags, &Tag{Name: tag}) // 发现新标签，同步到全局 tags。
 		}
 	}
 }
