@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"sync"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -23,26 +24,31 @@ type HandleMeta struct {
 	m sync.Map
 }
 
+func handlerKey(h Handler) uintptr {
+	return *(*uintptr)(unsafe.Pointer(&h))
+}
+
 func (m *HandleMeta) Get(h Handler) (*HandleArg, bool) {
-	if v, ok := m.m.Load(h); ok {
+	if v, ok := m.m.Load(handlerKey(h)); ok {
 		return v.(*HandleArg), true
 	}
 	return nil, false
 }
 
 func (m *HandleMeta) Set(h Handler, meta *HandleArg) {
-	m.m.Store(h, meta)
+	m.m.Store(handlerKey(h), meta)
 }
 
 func (m *HandleMeta) Delete(h Handler) {
-	m.m.Delete(h)
+	m.m.Delete(handlerKey(h))
 }
 
 func (m *HandleMeta) Pop(h Handler) (a *HandleArg, ok bool) {
-	if v, exist := m.m.Load(h); exist {
+	key := handlerKey(h)
+	if v, exist := m.m.Load(key); exist {
 		a, ok = v.(*HandleArg)
 	}
-	m.m.Delete(h)
+	m.m.Delete(key)
 	return
 }
 
