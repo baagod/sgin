@@ -100,7 +100,7 @@ c.Status(204).Send("") // 设置 HTTP 状态码并返回响应数据
 
 - `Values() map[string]any`: 获取所有请求参数的键值对（Body 覆盖 Query）
 - `Value(string, ...string) string`: 获取字符串参数，支持默认值
-- `ValueAny(string, ...any) any, ValueInt, ...`: 获取查询或请求体参数
+- `ValueAny(string, ...any) any`, `ValueInt, ...`: 获取查询或请求体参数
 - `ValueFile(string) (*multipart.FileHeader, error)`: 获取上传的文件
 - `SaveFile(*multipart.FileHeader, string) error`: 保存上传的文件到指定路径
 
