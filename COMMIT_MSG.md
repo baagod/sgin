@@ -1,3 +1,5 @@
-fix(handler): 修复参数绑定中校验错误未及时返回的问题
+feat(ctx): 扩展 Ctx 参数获取方法并增强默认值支持
 
-在 `bindV3` 中，当 `Validator.ValidateStruct` 返回校验错误时，虽然进行了翻译处理，但未执行 `return`，导致程序继续执行并可能返回不正确的成功结果。
+- 在 `Ctx` 中增加 `ValueInt8/16/32/64`, `ValueUint/8/16/32/64`, `ValueTime`, `ValueDuration` 等类型安全的获取方法
+- 将 `Ctx.Value` 的默认值参数类型从 `string` 修改为 `any`，提升灵活性。
+- 优化 `README.md` 中的示例代码和描述

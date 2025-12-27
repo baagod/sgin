@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/clbanning/mxj/v2"
@@ -103,7 +104,7 @@ func (c *Ctx) Values() map[string]any {
 }
 
 // Value 获取请求参数
-func (c *Ctx) Value(key string, def ...string) string {
+func (c *Ctx) Value(key string, def ...any) string {
 	if len(def) == 0 {
 		return cast.ToString(c.ValueAny(key))
 	}
@@ -123,8 +124,44 @@ func (c *Ctx) ValueInt(key string, def ...any) int {
 	return cast.ToInt(c.ValueAny(key, def...))
 }
 
+func (c *Ctx) ValueInt8(key string, def ...any) int8 {
+	return cast.ToInt8(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueInt16(key string, def ...any) int16 {
+	return cast.ToInt16(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueInt32(key string, def ...any) int32 {
+	return cast.ToInt32(c.ValueAny(key, def...))
+}
+
 func (c *Ctx) ValueInt64(key string, def ...any) int64 {
 	return cast.ToInt64(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueUint(key string, def ...any) uint {
+	return cast.ToUint(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueUint8(key string, def ...any) uint8 {
+	return cast.ToUint8(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueUint16(key string, def ...any) uint16 {
+	return cast.ToUint16(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueUint32(key string, def ...any) uint32 {
+	return cast.ToUint32(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueUint64(key string, def ...any) uint64 {
+	return cast.ToUint64(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueFloat32(key string, def ...any) float32 {
+	return cast.ToFloat32(c.ValueAny(key, def...))
 }
 
 func (c *Ctx) ValueFloat64(key string, def ...any) float64 {
@@ -133,6 +170,14 @@ func (c *Ctx) ValueFloat64(key string, def ...any) float64 {
 
 func (c *Ctx) ValueBool(key string, def ...any) bool {
 	return cast.ToBool(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueTime(key string, def ...any) time.Time {
+	return cast.ToTime(c.ValueAny(key, def...))
+}
+
+func (c *Ctx) ValueDuration(key string, def ...any) time.Duration {
+	return cast.ToDuration(c.ValueAny(key, def...))
 }
 
 // ValueFile 获取上传的文件

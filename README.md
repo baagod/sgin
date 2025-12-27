@@ -1,6 +1,6 @@
 # sgin
 
-`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的 **实用主义** HTTP Web 框架，旨在提供简洁易用的 API 开发体验。它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，并且 **兼容原生 `gin` 和 `gin.HandlerFunc`**。
+`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的 **实用主义** HTTP 框架，旨在提供简洁易用的 API 开发体验。它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，并且 **兼容原生 `gin` 和 `gin.HandlerFunc`**。
 
 ## 核心特性
 
@@ -69,8 +69,7 @@ r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
 
 // 3. 仅错误：适合文件下载或不返回数据的中间件处理操作
 r.GET("/download", sgin.Hn(func(c *sgin.Ctx) error {
-    c.SendFile("report.pdf")
-    return nil
+    return c.SendFile("report.pdf")
 }))
 ```
 
@@ -88,6 +87,7 @@ c.Send("Hello") // 自动根据 Accept 头发送对应类型的数据
 c.SendJSON(User{})  // 或手动指定格式
 c.Send(sgin.ErrBadRequest("bad"))  // 指定错误和可选的消息返回
 c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发送响应数据
+c.Status(204).Send("") // 设置 HTTP 状态码并返回响应数据
 ```
 
 ### 增强的 Context
