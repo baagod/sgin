@@ -10,7 +10,7 @@ import (
 )
 
 // Logger 返回一个 Gin 中间件，用于打印结构化的 JSON 请求日志。
-var Logger = Hn(func(c *Ctx) error {
+var Logger = Hn(func(c *Ctx) {
 	gc := c.Gin() // *gin.Context
 
 	// Start timer
@@ -61,9 +61,8 @@ var Logger = Hn(func(c *Ctx) error {
 		_ = enc.Encode(logMap)
 
 		fn(c, msg, sb.String())
-		return c.Next()
+		return
 	}
 
 	fmt.Println(msg)
-	return c.Next()
 })

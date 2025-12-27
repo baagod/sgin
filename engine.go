@@ -76,14 +76,14 @@ func New(config ...Config) *Engine {
 
 	// OpenAPI 文档中间件
 	if cfg.OpenAPI != nil && cfg.Mode != gin.ReleaseMode {
-		e.GET("/openapi.yaml", Hn(func(c *Ctx) error {
+		e.GET("/openapi.yaml", He(func(c *Ctx) error {
 			if specYAML, err := cfg.OpenAPI.YAML(); err == nil {
 				return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
 			}
 			return c.Send(ErrInternalServerError())
 		}), APIHidden)
 
-		e.GET("/docs", Hn(func(c *Ctx) error {
+		e.GET("/docs", He(func(c *Ctx) error {
 			return c.Content(MIMETextHTMLUTF8).Send(DocsHTML)
 		}), APIHidden)
 

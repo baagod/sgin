@@ -7,12 +7,12 @@ import (
 )
 
 type Result struct {
-	Event   string `json:"event"`  // 事件标识
-	Status  int    `json:"status"` // 自定义状态码，经常用于定义请求成功或失败等错误状态 (非 HTTP 状态码)
-	Code    int    `json:"code"`   // 自定义代码，经常与 Status 关联。例如: Status=0 时，Code=N。
-	Count   int    `json:"count"`  // 如果 Data 返回列表，可以在这里设置列表长度。
-	Message string `json:"msg"`    // 结果消息
-	Data    any    `json:"data"`   // 结果数据
+	Event  string `json:"event"`  // 事件标识
+	Status int    `json:"status"` // 自定义状态码，经常用于定义请求成功或失败等错误状态 (非 HTTP 状态码)
+	Code   int    `json:"code"`   // 自定义代码，经常与 Status 关联。例如: Status=0 时，Code=N。
+	Count  int    `json:"count"`  // 如果 Data 返回列表，可以在这里设置列表长度。
+	Msg    string `json:"msg"`    // 结果消息
+	Data   any    `json:"data"`   // 结果数据
 }
 
 func (r *Result) newStatus(status any, code ...any) *Result {
@@ -65,13 +65,13 @@ func (r *Result) SetEvent(e string) *Result {
 	return r
 }
 
-// SetMessage 设置消息
-func (r *Result) SetMessage(format any, a ...any) *Result {
+// SetMsg 设置消息
+func (r *Result) SetMsg(format any, a ...any) *Result {
 	m := fmt.Sprintf(fmt.Sprint(format), a...)
 	if r == nil {
-		return &Result{Message: m}
+		return &Result{Msg: m}
 	}
-	r.Message = m
+	r.Msg = m
 	return r
 }
 

@@ -88,7 +88,7 @@ func (r *RecoverInfo) JSON() string {
 }
 
 // Recovery 是一个增强版的错误恢复中间件，它能打印出发生 panic 的具体源代码片段。
-var Recovery = Hn(func(c *Ctx) error {
+var Recovery = He(func(c *Ctx) error {
 	gc := c.Gin()
 	defer func() {
 		if recovered := recover(); recovered != nil {

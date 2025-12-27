@@ -44,10 +44,10 @@ func (m *HandleMeta) Delete(h Handler) {
 	m.m.Delete(handlerKey(h))
 }
 
-func (m *HandleMeta) Pop(h Handler) (a *HandleArg, ok bool) {
+func (m *HandleMeta) Pop(h Handler) (a *HandleArg) {
 	key := handlerKey(h)
 	if v, exist := m.m.Load(key); exist {
-		a, ok = v.(*HandleArg)
+		a, _ = v.(*HandleArg)
 	}
 	m.m.Delete(key)
 	return
@@ -101,10 +101,18 @@ func Ho[I any, R any](f func(*Ctx, I) R) Handler {
 	})
 }
 
-// Hn 创建一个无输入、无输出（仅返回 error）的处理器
-func Hn(f func(*Ctx) error) Handler {
+// He 创建一个无输入且仅返回 error 的处理器方法
+func He(f func(*Ctx) error) Handler {
 	return H(func(c *Ctx, _ struct{}) (any, error) {
 		return nil, f(c)
+	})
+}
+
+// Hn 创建一个无输入输出的处理器方法
+func Hn(f func(*Ctx)) Handler {
+	return H(func(c *Ctx, _ struct{}) (any, error) {
+		f(c)
+		return nil, nil
 	})
 }
 

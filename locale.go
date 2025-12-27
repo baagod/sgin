@@ -113,7 +113,7 @@ func useTranslator(e *Engine) (h Handler) {
 	e.defaultLang = supportedTags[0]
 	e.languageMatcher = language.NewMatcher(supportedTags)
 
-	return Hn(func(c *Ctx) error {
+	return He(func(c *Ctx) error {
 		// 1. 优先检查查询参数 ?lang=zh-CN
 		if lang := c.ctx.Query("lang"); lang != "" {
 			if tag, err := language.Parse(lang); err == nil {

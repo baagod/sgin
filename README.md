@@ -54,7 +54,7 @@ func main() {
 `sgin` 通过泛型包装器将普通函数转换为 `gin.HandlerFunc`，实现参数的自动绑定与响应的自动处理。
 
 ```go
-// 1. 标准写法：自动绑定 JSON/Form 到 User 结构体
+// 1. 标准写法：自动绑定 Query, Form, JSON, XML, Multipart 请求信息到 User 结构体
 r.POST("/users", sgin.H(func(c *sgin.Ctx, user User) (User, error) {
     if err := db.Create(&user); err != nil {
         return User{}, err // 自动处理错误响应
@@ -62,14 +62,19 @@ r.POST("/users", sgin.H(func(c *sgin.Ctx, user User) (User, error) {
     return user, nil // 自动序列化为 JSON
 }))
 
-// 2. 仅输出：适合查询类接口
+// 2. 仅输出处理器
 r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
     return "v1.0.0"
 }))
 
-// 3. 仅错误：适合文件下载或不返回数据的中间件处理操作
-r.GET("/download", sgin.Hn(func(c *sgin.Ctx) error {
+// 3. 仅错误处理器
+r.GET("/download", sgin.He(func(c *sgin.Ctx) error {
     return c.SendFile("report.pdf")
+}))
+
+// 4. 无输入输出的处理器方法
+r.GET("/", sgin.He(func(c *sgin.Ctx) {
+   // 代码逻辑..
 }))
 ```
 
@@ -96,7 +101,7 @@ c.Status(204).Send("") // 设置 HTTP 状态码并返回响应数据
 
 ```go
 r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) (r *Result) {
-    return r.SetMessage("succees").OK()
+    return r.SetMsg("succees").OK()
 }))
 ```
 
@@ -112,7 +117,7 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 - `Status`: 自定义状态码，经常用于定义请求成功或失败等错误状态 (非 HTTP 状态码)。
 - `Code`: 自定义代码，经常与 `Status` 关联。例如: `Status=0` 时，`Code=N`。
 - `Count`: 如果 `Data` 返回列表，可以在这里设置列表长度。
-- `Message`: 结果消息
+- `Msg`: 结果消息
 - `Data`: 结果数据
 
 支持如下方法：
@@ -120,7 +125,7 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 - `SetStatus(status any, code ...any) *Result`
 - `SetCode(any) *Result`
 - `SetEvent(string) *Result`
-- `SetMessage(format any, a ...any) *Result`
+- `SetMsg(format any, a ...any) *Result`
 - `OK(...any) *Result`
 - `Failed(...any) *Result`
 

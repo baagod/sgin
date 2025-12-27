@@ -41,6 +41,9 @@ type Router struct {
 }
 
 func (r *Router) Use(handlers ...Handler) IRouter {
+	for _, x := range handlers {
+		_ = hMeta.Pop(x)
+	}
 	r.i.Use(handlers...)
 	return r
 }
@@ -79,12 +82,12 @@ func (r *Router) Any(path string, h Handler, ops ...AddOperation) IRouter {
 
 func (r *Router) Handle(method, path string, h Handler, ops ...AddOperation) IRouter {
 	if r.e.cfg.OpenAPI != nil {
-		if meta, ok := hMeta.Pop(h); ok {
+		if a := hMeta.Pop(h); a != nil {
 			op := r.op.Clone()
 			for _, f := range ops {
 				f(op)
 			}
-			r.api.Register(op, r.fullPath(path), method, meta)
+			r.api.Register(op, r.fullPath(path), method, a)
 		}
 	}
 	r.i.Handle(method, path, h)
