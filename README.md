@@ -1,8 +1,6 @@
 # sgin
 
-`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的**实用主义** Web 框架，旨在提供简洁易用的 API 开发体验。
-
-它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，**并且兼容原生 `gin`、`gin.HandlerFunc` (包括中间件)**。
+`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的 **实用主义** Web 框架，旨在提供简洁易用的 API 开发体验。它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，**并且兼容原生 `gin` 和 `gin.HandlerFunc`**。
 
 ## 核心特性
 
@@ -10,7 +8,7 @@
 - 📚 **代码即文档**: 定义好结构体，OpenAPI 3.1 文档自动生成，无需手写 YAML。
 - 🛡️ **统一错误处理**: 内置错误规范与标准化响应封装。
 - 🌍 **国际化支持**: 基于 `langeuge.tag` 的参数校验错误自动翻译。
-- ⚡  **开箱即用**: 内置结构化日志、`Panic` 堆栈追踪、跨域处理等工程化组件。
+-  ⚡ **开箱即用**: 内置结构化日志、`Panic` 堆栈追踪处理等工程化组件。
 
 ## 安装
 
@@ -34,9 +32,9 @@ type HelloResp struct {
 }
 
 func main() {
-   r := sgin.New(sgin.Config{
-     OpenAPI: sgin.NewAPI(), // 启用 OpenAPI 文档生成
-   })
+    r := sgin.New(sgin.Config{
+        OpenAPI: sgin.NewAPI(), // 启用 OpenAPI 文档生成
+    })
    
    // 使用 sgin.Ho (Handler Output-only) 包装器
    // 自动绑定 HelloReq，并将返回的 HelloResp 序列化为 JSON
@@ -71,29 +69,25 @@ r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
 
 // 3. 仅错误：适合文件下载或不返回数据的中间件处理操作
 r.GET("/download", sgin.Hn(func(c *sgin.Ctx) error {
-    c.Send(sgin.BodyFile("report.pdf"))
+    c.SendFile("report.pdf")
     return nil
 }))
 ```
 
-### 统一响应处理 
+### 统一响应处理
 
-`Handler` 的返回值会被自动处理：
+`Handler` 方法的返回值会被自动处理：
 
-- `error`: 调用配置的 `ErrorHandler` 将 `error.Error()` 返回。
+- `error`: 调用配置的 `ErrorHandler` 方法将 `error` 文本返回。
 - `data`: 根据请求头 `Accept` 格式化为 `JSON`, `XML` 或 `Text`。
-  - 若 `Accept` 包含 `application/xml` 且不包含 `text/html`，返回 XML。
-  - 若是字符串，返回 `text/plain`。
-  - 其他情况默认返回 `application/json`。
 
-你还可以使用 `c.Send()` 发送指定格式的数据：
+你可以使用 `c.Send()` 发送指定格式的数据：
 
 ```go
-c.Send("Hello") // 返回文本消息
-c.Send(User{})  // 根据请求头 `Accept` 返回对应格式的数据
-c.Send(sgin.BodyXML(User{}))       // 手动指定格式
-c.Send(sgin.ErrBadRequest("bad"))  // 返回指定的错误状态和可选消息
-c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发送数据
+c.Send("Hello") // 自动根据 Accept 头发送对应类型的数据
+c.SendJSON(User{})  // 或手动指定格式
+c.Send(sgin.ErrBadRequest("bad"))  // 指定错误和可选的消息返回
+c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发送响应数据
 ```
 
 ### 增强的 Context
@@ -128,15 +122,6 @@ c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发�
 - `Status(code int) *Ctx`: 设置响应状态码
 - `Header(key string, value string) *Ctx`: 设置响应头
 - `Content(value string) *Ctx`: 设置 `Content-Type` 头
-
-**支持的响应体格式：**
-
-- `sgin.BodyJSON(any)`: 返回 JSON 
-- `sgin.BodyXML(any)`: 返回 XML 
-- `sgin.BodyText(any)`: 返回纯文本
-- `sgin.BodyUpload(any)`: 文件上传
-- `sgin.BodyDownload(any)`: 文件下载
-- `sgin.BodyHTML(name string, data any)`: 返回 HTML
 
 #### 上下文存储与中间件
 
