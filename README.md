@@ -1,6 +1,6 @@
 # sgin
 
-`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的 **实用主义** Web 框架，旨在提供简洁易用的 API 开发体验。它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，**并且兼容原生 `gin` 和 `gin.HandlerFunc`**。
+`sgin` 是一个基于 [Gin](https://github.com/gin-gonic/gin) 的 **实用主义** HTTP Web 框架，旨在提供简洁易用的 API 开发体验。它通过增强 **处理器方法**、**自动化参数绑定**、**统一错误处理** 以及 **代码即文档** 的核心能力，并且 **兼容原生 `gin` 和 `gin.HandlerFunc`**。
 
 ## 核心特性
 
