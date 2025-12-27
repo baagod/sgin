@@ -267,7 +267,7 @@ func (c *Ctx) Next() error {
 	return nil
 }
 
-// Get 设置或将值存储到上下文
+// Get 设置或将值存储到上下文，不会发生 panic。
 func (c *Ctx) Get(key string, value ...any) any {
 	if len(value) > 0 {
 		c.ctx.Set(key, value[0])

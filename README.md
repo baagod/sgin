@@ -165,10 +165,9 @@ r := sgin.New(sgin.Config{
     // 自定义日志处理器
     // out: 控制台友好格式，stru: 结构化 JSON 格式
     // 返回 true 继续输出默认日志，false 拦截日志输出
-    Logger: func(c *sgin.Ctx, out, stru string) bool {
+    Logger: func(c *sgin.Ctx, out, stru string) {
         fmt.Print(out) // 控制台日志
         log.Info(stru) // JSON 日志
-        return false   // 拦截默认日志输出
     },
 })
 ```

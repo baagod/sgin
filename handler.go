@@ -134,6 +134,8 @@ func bindV3(c *Ctx, t reflect.Type, ptr bool) (_ any, err error) {
 				err = errors.New(errs[0].Translate(trans)) // 翻译首个校验错误
 			}
 		}
+
+		return
 	}
 
 	if ptr { // 用户要 *t

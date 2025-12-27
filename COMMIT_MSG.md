@@ -1,6 +1,3 @@
-feat(ctx): 重构响应发送机制，统一使用 SendXX 前缀方法
+fix(handler): 修复参数绑定中校验错误未及时返回的问题
 
-- 在 Ctx 中新增 SendJSON, SendXML, SendText, SendHTML, SendFile, SendDownload 方法
-- 移除冗余的 Body 包装器及 body.go 文件
-- 简化 autoFormat 逻辑，实现更直观的响应分发
-- 同步更新 README.md 文档及示例代码
+在 `bindV3` 中，当 `Validator.ValidateStruct` 返回校验错误时，虽然进行了翻译处理，但未执行 `return`，导致程序继续执行并可能返回不正确的成功结果。
