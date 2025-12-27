@@ -177,7 +177,7 @@ r := sgin.New(sgin.Config{
         return c.Status(500).Send(map[string]any{"msg": err.Error()})
     },
     
-	// 自定义日志处理器
+    // 自定义日志处理器
     // out: 控制台友好格式，stru: 结构化 JSON 格式
     // 返回 true 继续输出默认日志，false 拦截日志输出
     Logger: func(c *sgin.Ctx, out, stru string) bool {
@@ -339,7 +339,7 @@ type LoginReq struct {
 
 可通过 `sgin.SupportedLanguages()` 函数获取受支持的语言列表。
 
-### OpenAPI 文档自动生成
+### OpenAPI 文档生成
 
 无需额外配置，`sgin` 会分析你的 Handler 输入输出结构体，自动生成 OpenAPI 3.1 规范。
 
