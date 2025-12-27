@@ -86,6 +86,8 @@ func New(config ...Config) *Engine {
 		e.GET("/docs", Hn(func(c *Ctx) error {
 			return c.Content(MIMETextHTMLUTF8).Send(DocsHTML)
 		}), APIHidden)
+
+		debugInfo("OpenAPI 已开启，访问 /docs 或 /openapi.yaml 查看文档及配置信息。")
 	}
 
 	return e
