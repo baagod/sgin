@@ -1,40 +1,24 @@
 package main
 
-import (
-	"mime/multipart"
-
-	"github.com/baagod/sgin"
-)
+import "github.com/gin-gonic/gin"
 
 type User struct {
 	Name string `json:"name"`
+	Age  int    `json:"age"`
 }
 
-type HelloReq struct {
-	Name string `form:"name"`
-}
-
-type FileModel struct {
-	File   *multipart.FileHeader `form:"file"`
-	Age    int                   `form:"age"`
-	Weight int64                 `form:"weight"`
-	Child  int64                 `form:"child"` // 测试是否显示 format
+type Result struct {
+	Status int    `json:"status"`
+	Code   string `json:"name"`
+	Data   any    `json:"age"`
 }
 
 func main() {
-	r := sgin.New(sgin.Config{
-		OpenAPI: sgin.NewAPI(),
+	g := gin.Default()
+
+	g.GET("/", func(c *gin.Context) {
+
 	})
 
-	r.POST("/hello", sgin.Ho(func(c *sgin.Ctx, req FileModel) error {
-		return nil
-	}))
-
-	// r.GET("/doc", sgin.Ho(func(c *sgin.Ctx, _ struct{}) string {
-	// 	return "ok"
-	// }), func(op *sgin.Operation) {
-	// 	op.Summary = "Doc Test"
-	// })
-
-	_ = r.Run(":8080")
+	_ = g.Run(":8080")
 }

@@ -206,6 +206,45 @@ func (c *Ctx) Send(body any) error {
 	return nil
 }
 
+func (c *Ctx) SendJSON(data any) error {
+	c.ctx.Abort()
+	c.ctx.JSON(c.StatusCode(), data)
+	return nil
+}
+
+func (c *Ctx) SendXML(data any) error {
+	c.ctx.Abort()
+	c.ctx.XML(c.StatusCode(), data)
+	return nil
+}
+
+func (c *Ctx) SendText(data any) error {
+	c.ctx.Abort()
+	c.ctx.String(c.StatusCode(), fmt.Sprint(data))
+	return nil
+}
+
+func (c *Ctx) SendHTML(name string, data any) error {
+	c.ctx.Abort()
+	c.ctx.HTML(c.StatusCode(), name, data)
+	return nil
+}
+
+func (c *Ctx) SendFile(path string) error {
+	c.ctx.Abort()
+	c.ctx.File(path)
+	return nil
+}
+
+func (c *Ctx) SendDownload(file string, name ...string) error {
+	filename := filepath.Base(file)
+	if len(name) > 0 {
+		filename = name[0]
+	}
+	disposition := `attachment; filename*=UTF-8''` + url.QueryEscape(filename)
+	return c.Header(HeaderContentDisposition, disposition).SendFile(file)
+}
+
 func (c *Ctx) Status(code int) *Ctx {
 	c.Writer.WriteHeader(code)
 	return c
@@ -285,57 +324,25 @@ func (c *Ctx) autoFormat(body any) {
 		return
 	}
 
-	status := c.StatusCode() // HTTP 状态码
-
-	// 1. 如果指定格式
-	if f, ok := body.(Body); ok && f.format != "" {
-		switch f.format {
-		case FmtJSON:
-			gc.JSON(status, f.data)
-		case FmtXML:
-			gc.XML(status, f.data)
-		case FmtText:
-			gc.String(status, fmt.Sprint(f.data))
-		case FmtUpload, FmtDownload:
-			file := fmt.Sprint(f.data)
-			if f.format == FmtDownload {
-				filename := filepath.Base(file)
-				c.Header(HeaderContentDisposition, `attachment; filename*=UTF-8''`+url.QueryEscape(filename))
-			}
-			gc.File(file) // 将指定文件写入正体流
-		case FmtHTML: // 发送 HTML
-			gc.HTML(status, f.name, f.data)
-		default:
-			err := fmt.Errorf("unsupported response body format: '%s'", f.format)
-			_ = c.engine.cfg.ErrorHandler(c, err)
-		}
-
-		return
-	}
-
-	// 2. 特殊类型处理
+	// 处理错误
 	if err, ok := body.(error); ok {
 		_ = c.engine.cfg.ErrorHandler(c, err)
 		return
 	}
 
-	// 3. 按 Accept 头协商
-	// 如果明确只想要 XML 且不包含 HTML (排除浏览器默认行为)，才返回 XML。
-	// 浏览器通常 Accept 包含 text/html 和 application/xml，这里避免误判。
+	// 按 Accept 头协商返回数据
 	accept := c.GetHeader(HeaderAccept)
 	if (strings.Contains(accept, MIMEXML) || strings.Contains(accept, MIMETextXML)) &&
 		!strings.Contains(accept, MIMETextHTML) {
-		gc.XML(status, body)
+		_ = c.SendXML(body)
 		return
 	}
 
-	// 4. 默认策略 (按类型推断)
+	// 默认策略 (按类型推断)
 	switch v := body.(type) {
 	case string:
-		// 如果是字符串，默认为 text/plain
-		gc.String(status, v)
+		_ = c.SendText(v)
 	default:
-		// 其他类型（包括 struct, map, []byte, int 等），默认为 JSON
-		gc.JSON(status, body)
+		_ = c.SendJSON(body)
 	}
 }
