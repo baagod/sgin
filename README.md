@@ -397,7 +397,3 @@ r.POST("/orders",
 ## 贡献
 
 欢迎提交 Issue 和 PR！
-
-## 许可证
-
-MIT
