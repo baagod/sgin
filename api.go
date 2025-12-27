@@ -10,9 +10,9 @@ import (
 
 // isFileType 检查类型是否为文件上传类型 (*multipart.FileHeader 或 []*multipart.FileHeader)
 func isFileType(t reflect.Type) bool {
-	t = helper.DeRef(t)
+	t = helper.Deref(t)
 	if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
-		t = helper.DeRef(t.Elem())
+		t = helper.Deref(t.Elem())
 	}
 	return t == fileHeaderType
 }
@@ -61,7 +61,7 @@ func (a *API) Field(f reflect.StructField, hint string) (s *Schema) {
 
 // Register 将处理器的元数据 (输入/输出类型) 注册到指定的 Operation 中
 func (a *API) Register(op *Operation, path, method string, arg *HandleArg) {
-	if arg == nil {
+	if arg == nil || op.Hidden {
 		return
 	}
 
@@ -77,7 +77,7 @@ func (a *API) Register(op *Operation, path, method string, arg *HandleArg) {
 
 // parseRequestParams 解析输入标签 (uri, form, header, json) 并映射为 OpenAPI 的参数或请求体
 func (a *API) parseRequestParams(op *Operation, t reflect.Type) {
-	t = helper.DeRef(t)
+	t = helper.Deref(t)
 	if t.Kind() != reflect.Struct {
 		return
 	}

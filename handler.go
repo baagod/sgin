@@ -6,6 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/baagod/sgin/helper"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -63,10 +64,7 @@ func H[I any, R any](f func(*Ctx, I) (R, error)) Handler {
 		tIn = tIn.Elem()
 	}
 
-	tOut := reflect.TypeOf((*R)(nil)).Elem() // 同上
-	if tOut.Kind() == reflect.Ptr {
-		tOut = tOut.Elem()
-	}
+	tOut := helper.Deref(reflect.TypeOf((*R)(nil)).Elem()) // 同上
 
 	// 构造原生 Gin 闭包
 	h := func(gc *gin.Context) {

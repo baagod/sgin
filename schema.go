@@ -88,7 +88,7 @@ func getFields(t reflect.Type, callback func(info fieldInfo)) {
 			// 如果是内嵌字段（匿名字段），则需要进一步处理其内部结构
 			if f.Anonymous {
 				// 解引用以获取实际类型，因为内嵌字段可能是指针
-				embeddedTyp := helper.DeRef(f.Type)
+				embeddedTyp := helper.Deref(f.Type)
 
 				// 只有当内嵌的是结构体且该类型尚未被访问过时，才将其加入队列等待处理
 				if embeddedTyp.Kind() == reflect.Struct {

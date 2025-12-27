@@ -1,6 +1,7 @@
-docs: 更新 README.md，强调泛型特性并补全统一响应说明
+feat(openapi): 支持隐藏特定路由且默认隐藏内置文档路由
 
-- **核心重构**：重写 "快速开始" 与 "泛型处理器" 章节，明确展示 `sgin.H/Ho/Hn` 泛型包装器的用法。
-- **兼容性声明**：在简介中明确添加 "完美兼容原生 gin、gin.HandlerFunc (包括中间件处理)"。
-- **特性补全**：新增 "统一响应处理" 章节，详细说明 `Accept` 头协商逻辑 (JSON/XML/Text)。
-- **文档整合**：保留并整合了详细的 Context API 列表、工程化配置说明及 Panic 堆栈日志示例。
+- 在 Operation 中增加 Hidden 标记位
+- 新增 APIHidden 装饰器函数用于标记隐藏路由
+- 在 api.Register 中实现隐藏逻辑
+- 默认隐藏 /openapi.yaml 和 /docs 路由
+- 优化 registry.go 中的 Schema 解析逻辑

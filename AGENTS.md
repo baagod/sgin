@@ -159,7 +159,7 @@ Provide **insightful feedback** and **concrete, ready-to-use code suggestions** 
 
 1. **等待用户指令**：等待用户对你明确发出 "编写提交信息" 指令 **（不得擅自编写或提交）**。
 2. **编写提交信息**：编写一份符合 **Conventional Commits** 规范的中文提交信息，写入并覆盖项目的 **COMMIT_MSG.md** 文件。
-3. **检查项目状态**：执行 `git_status` 确认项目变更状态，如有疑问，则继续和用户交流。
+3. **检查项目状态**：执行 `git_status` 确认项目变更状态，如有疑问，继续和用户交流。
 4. **执行最终提交**：执行 `git_add .`, `git commit -F COMMIT_MSG.md` 完成最终提交。
 
 ## 通用备注

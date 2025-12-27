@@ -63,6 +63,8 @@ type Operation struct {
 	Responses   map[string]*ResponseBody `yaml:"responses,omitempty"`
 	Security    []Requirement            `yaml:"security,omitempty"`
 	Tags        []string                 `yaml:"tags,omitempty"`
+
+	Hidden bool `yaml:"-"`
 }
 
 type Param struct {
@@ -131,11 +133,17 @@ func (o *Operation) Clone() *Operation {
 		_ = yaml.Unmarshal(data, &clone)
 	}
 
+	clone.Hidden = o.Hidden
 	if clone.Responses == nil {
 		clone.Responses = map[string]*ResponseBody{}
 	}
 
 	return &clone
+}
+
+// APIHidden 将 Operation 标记为隐藏，使其不会出现在 OpenAPI 文档中。
+func APIHidden(op *Operation) {
+	op.Hidden = true
 }
 
 const DocsHTML = `

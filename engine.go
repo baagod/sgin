@@ -81,11 +81,11 @@ func New(config ...Config) *Engine {
 				return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
 			}
 			return c.Send(ErrInternalServerError())
-		}))
+		}), APIHidden)
 
 		e.GET("/docs", Hn(func(c *Ctx) error {
 			return c.Content(MIMETextHTMLUTF8).Send(DocsHTML)
-		}))
+		}), APIHidden)
 	}
 
 	return e

@@ -28,7 +28,7 @@ func mainMod() string {
 
 // DefaultSchemaNamer 根据 “去域名 + 取最后两级” 策略生成名称
 func DefaultSchemaNamer(t reflect.Type, hint string) string {
-	t = helper.DeRef(t)
+	t = helper.Deref(t)
 
 	name := t.Name()
 	if name == "" {
@@ -98,7 +98,7 @@ func (r *Registry) Schema(t reflect.Type, hint ...string) *Schema {
 		prefix = hint[0]
 	}
 
-	switch kind := t.Kind(); kind {
+	switch t.Kind() {
 	case reflect.Bool:
 		return &Schema{Type: TypeBoolean, Nullable: nullable}
 	case reflect.Int, reflect.Uint:
@@ -129,10 +129,10 @@ func (r *Registry) Schema(t reflect.Type, hint ...string) *Schema {
 	case reflect.Struct:
 		// 只有 [结构体] 才注册到组件 (Components)，在方法中注册类型并返回。
 		return r.Struct(t, hint...)
+	case reflect.Interface:
+		// 接口可以是任意对象
 	default:
-		if kind != reflect.Interface { // 接口可以是任意对象
-			return nil
-		}
+		return nil
 	}
 
 	return &Schema{} // reflect.Interface 或其他类型
