@@ -1,5 +1,5 @@
-feat(ctx): 扩展 Ctx 参数获取方法并增强默认值支持
+docs(readme): 添加 sgin.Result 标准化响应封装的使用说明
 
-- 在 `Ctx` 中增加 `ValueInt8/16/32/64`, `ValueUint/8/16/32/64`, `ValueTime`, `ValueDuration` 等类型安全的获取方法
-- 将 `Ctx.Value` 的默认值参数类型从 `string` 修改为 `any`，提升灵活性。
-- 优化 `README.md` 中的示例代码和描述
+- 在 README.md 中新增 "标准化响应封装" 章节
+- 详细说明 Result 结构体字段及配套的链式调用方法 (SetStatus, SetMessage, OK, Failed 等)
+- 同步更新 example/main.go 中的示例代码以演示 sgin.Result 的用法

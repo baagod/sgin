@@ -90,6 +90,40 @@ c.Header(sgin.HeaderAcceptLanguage, "zh-cn").Send("") // 设置请求头并发�
 c.Status(204).Send("") // 设置 HTTP 状态码并返回响应数据
 ```
 
+#### 标准化响应封装
+
+`sgin` 还提供了一套标准化的业务响应结构，适用于需要统一返回格式 (如：`status`, `code`, `msg`, `data`) 的场景。
+
+```go
+r.GET("/version", sgin.Ho(func(c *sgin.Ctx, _ struct{}) (r *Result) {
+    return r.SetMessage("succees").OK()
+}))
+```
+
+注意，如果 `r` 为 `nil`，调用 `r.SetXX` 系列方法会返回一个新的 `*Result`，你可以用 `r` 再次接收它：
+
+```go
+r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
+```
+
+`Result` 结构体字段如下：
+
+- `Event`: 事件标识
+- `Status`: 自定义状态码，经常用于定义请求成功或失败等错误状态 (非 HTTP 状态码)。
+- `Code`: 自定义代码，经常与 `Status` 关联。例如: `Status=0` 时，`Code=N`。
+- `Count`: 如果 `Data` 返回列表，可以在这里设置列表长度。
+- `Message`: 结果消息
+- `Data`: 结果数据
+
+支持如下方法：
+
+- `SetStatus(status any, code ...any) *Result`
+- `SetCode(any) *Result`
+- `SetEvent(string) *Result`
+- `SetMessage(format any, a ...any) *Result`
+- `OK(...any) *Result`
+- `Failed(...any) *Result`
+
 ### 增强的 Context
 
 `sgin.Ctx` 封装了 `gin.Context`，提供了更符合人体工程学的 API：

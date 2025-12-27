@@ -13,12 +13,6 @@ type User struct {
 	Head int    `head:"head"`
 }
 
-type Result struct {
-	Status int    `json:"status"`
-	Code   string `json:"code"`
-	Data   any    `json:"data"`
-}
-
 func main() {
 	r := sgin.New(sgin.Config{
 		Mode:    gin.DebugMode,
@@ -29,8 +23,8 @@ func main() {
 		},
 	})
 
-	r.POST("/users/:id", sgin.Ho(func(ctx *sgin.Ctx, _ struct{}) error {
-		return nil
+	r.POST("/users/:id", sgin.Ho(func(ctx *sgin.Ctx, _ struct{}) (r *sgin.Result) {
+		return r.SetCode("").SetStatus("")
 	}))
 
 	_ = r.Run(":8080")
