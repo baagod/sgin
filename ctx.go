@@ -383,7 +383,7 @@ func (c *Ctx) autoFormat(body any) {
 
 	// 其他情况，使用 Gin Negotiate 进行正常内容协商。
 	gc.Negotiate(c.StatusCode(), gin.Negotiate{
-		Offered: []string{MIMEJSON, MIMEXML, MIMETextXML, MIMETextPlain},
+		Offered: []string{MIMEJSON, MIMEXML, MIMETextXML, MIMETextPlain, MIMETextHTML},
 		Data:    body,
 	})
 }
