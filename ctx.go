@@ -312,7 +312,7 @@ func (c *Ctx) SendHTML(name string, data any) error {
 	return nil
 }
 
-func (c *Ctx) SendBinary(data []byte) error {
+func (c *Ctx) SendBytes(data []byte) error {
 	c.ctx.Abort()
 	c.ctx.Data(c.StatusCode(), c.GetHeader(HeaderContentType), data)
 	return nil
@@ -360,8 +360,8 @@ func (c *Ctx) SendSSEvent(name string, message any) error {
 	return nil
 }
 
-// Redirect 返回到特定位置的 HTTP 重定向
-func (c *Ctx) Redirect(loc string) error {
+// SendRedirect 返回到特定位置的 HTTP 重定向
+func (c *Ctx) SendRedirect(loc string) error {
 	c.ctx.Abort()
 	c.ctx.Redirect(c.StatusCode(), loc)
 	return nil
