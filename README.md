@@ -27,6 +27,8 @@
 go get github.com/baagod/sgin/v2
 ```
 
+如果你需要 go1.20 支持，使用 `go get github.com/baagod/sgin`。
+
 ## 快速开始
 
 ```go
