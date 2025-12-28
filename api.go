@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 )
 
 // isFileType 检查类型是否为文件上传类型 (*multipart.FileHeader 或 []*multipart.FileHeader)

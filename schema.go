@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 )
 
 // JSON Schema 类型常量

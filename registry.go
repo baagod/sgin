@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 	"github.com/bytedance/sonic"
 )
 
