@@ -1,5 +1,5 @@
-docs: 更新 README 并重构开发准则
+refactor: 优化 `autoFormat` 内容协商逻辑，简化判断条件
 
-- 优化 `README.md` 简介，移除冗余描述并新增 `Result` 标准化响应特性
-- 重构 `Rules.md`，整合 AGENTS.md 中的核心约束，确立 “本地优先” 与 “指令唯一” 原则
-- 精简 `AGENTS.md`，移除重复的系统指令
+- 改用 `strings.HasPrefix` 检查 `Accept` 头前缀是否为 `text/html`，精准识别浏览器直接访问。
+- 删除手动的 XML 和类型判断逻辑，统一使用 Gin `Negotiate` 进行标准内容协商。
+- 浏览器直接访问时返回 JSON 便于调试，其他情况按 `Accept` 头偏好响应。

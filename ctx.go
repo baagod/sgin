@@ -375,19 +375,15 @@ func (c *Ctx) autoFormat(body any) {
 		return
 	}
 
-	// 按 Accept 头协商返回数据
-	accept := c.GetHeader(HeaderAccept)
-	if (strings.Contains(accept, MIMEXML) || strings.Contains(accept, MIMETextXML)) &&
-		!strings.Contains(accept, MIMETextHTML) {
-		_ = c.SendXML(body)
+	// Accept 前缀是 "text/html" 为浏览器直接访问，直接返回 JSON。
+	if strings.HasPrefix(c.GetHeader(HeaderAccept), MIMETextHTML) {
+		_ = c.SendJSON(body)
 		return
 	}
 
-	// 默认策略 (按类型推断)
-	switch v := body.(type) {
-	case string:
-		_ = c.SendText(v)
-	default:
-		_ = c.SendJSON(body)
-	}
+	// 其他情况，使用 Gin Negotiate 进行正常内容协商。
+	gc.Negotiate(c.StatusCode(), gin.Negotiate{
+		Offered: []string{MIMEJSON, MIMEXML, MIMETextXML, MIMETextPlain},
+		Data:    body,
+	})
 }
