@@ -269,6 +269,18 @@ func (c *Ctx) SendText(data any) error {
 	return nil
 }
 
+func (c *Ctx) SendYAML(data any) error {
+	c.ctx.Abort()
+	c.ctx.YAML(c.StatusCode(), data)
+	return nil
+}
+
+func (c *Ctx) SendTOML(data any) error {
+	c.ctx.Abort()
+	c.ctx.TOML(c.StatusCode(), data)
+	return nil
+}
+
 func (c *Ctx) SendHTML(name string, data any) error {
 	c.ctx.Abort()
 	c.ctx.HTML(c.StatusCode(), name, data)
@@ -383,7 +395,10 @@ func (c *Ctx) autoFormat(body any) {
 
 	// 其他情况，使用 Gin Negotiate 进行正常内容协商。
 	gc.Negotiate(c.StatusCode(), gin.Negotiate{
-		Offered: []string{MIMEJSON, MIMEXML, MIMETextXML, MIMETextPlain},
-		Data:    body,
+		Offered: []string{
+			MIMEJSON, MIMETextHTML, MIMEXML,
+			MIMETextXML, MIMEYAML, MIMEYAMLX, MIMETOML,
+		},
+		Data: body,
 	})
 }

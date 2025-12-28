@@ -42,7 +42,7 @@ func DefaultErrorHandler(c *Ctx, err error) error {
 		code = stc
 	}
 
-	return c.Content(MIMETextPlainUTF8).Status(code).Send(err.Error())
+	return c.Content(MIMETextPlain).Status(code).Send(err.Error())
 }
 
 func New(config ...Config) *Engine {
@@ -78,13 +78,13 @@ func New(config ...Config) *Engine {
 	if cfg.OpenAPI != nil && cfg.Mode != gin.ReleaseMode {
 		e.GET("/openapi.yaml", He(func(c *Ctx) error {
 			if specYAML, err := cfg.OpenAPI.YAML(); err == nil {
-				return c.Content(MIMETextYAMLUTF8).Send(string(specYAML))
+				return c.Content(MIMEYAML).Send(string(specYAML))
 			}
 			return c.Send(ErrInternalServerError())
 		}), APIHidden)
 
 		e.GET("/docs", He(func(c *Ctx) error {
-			return c.Content(MIMETextHTMLUTF8).Send(DocsHTML)
+			return c.Content(MIMETextHTML).Send(DocsHTML)
 		}), APIHidden)
 
 		debugInfo("OpenAPI 已开启，访问 /docs 或 /openapi.yaml 查看文档。")
