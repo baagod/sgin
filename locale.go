@@ -1,7 +1,9 @@
 package sgin
 
 import (
+	"maps"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin/binding"
@@ -49,11 +51,7 @@ var langMapping = map[language.Tag]struct {
 
 // SupportedLanguages 返回框架支持的所有语言标签
 func SupportedLanguages() []language.Tag {
-	tags := make([]language.Tag, 0, len(langMapping))
-	for tag := range langMapping {
-		tags = append(tags, tag)
-	}
-	return tags
+	return slices.Collect(maps.Keys(langMapping))
 }
 
 // useTranslator 根据语言标签创建多语言核心组件

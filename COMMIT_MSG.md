@@ -1,8 +1,9 @@
-feat: 为 HTTP 方法添加颜色高亮并修复类型兼容性
+refactor: 采用 Go 1.24/1.23 特性进行现代化重构
 
-- 修复 `Ctx.Keys` 类型从 `map[string]any` 改为 `map[any]any` 以兼容新版 Gin
-- 修复 `Ctx.Get` 方法的 `key` 参数类型为 `any`
-- 新增 HTTP 方法颜色映射，支持 `GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS/TRACE`
-- 在 `anyMethods` 中移除 `http.MethodConnect`
-- 优化 `Logger` 日志格式，统一使用 `cyan` 颜色标识各字段
-- 简化 OpenAPI 调试提示信息
+- 在 `locale.go` 中使用 `maps.Keys` 和 `slices.Collect` 简化语言列表获取
+- 在 `schema.go` 中引入 `iter.Seq` 实现 `getFields` 迭代器，提升 `registry.go` 的可读性
+- 使用 `reflect.TypeFor` (Go 1.22+) 替换旧的反射类型获取方式
+- 在 `openapi.go` 中使用 `slices.Clone` 和 `maps.Clone` 优化 `Operation.Clone` 性能
+- 修改 `ctx.go` 中 `autoFormat` 逻辑，浏览器请求默认返回 JSON
+- 将 `for i := 0; i < n; i++` 替换为 `for i := range n` (api.go、schema.go、helper/helper.go)
+- 优化 `AGENTS.md` 和 `Rules.md` 中的系统指令及提交流程规范

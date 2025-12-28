@@ -23,7 +23,7 @@ func main() {
 		},
 	})
 
-	r.GET("/users/:id", sgin.Ho(func(ctx *sgin.Ctx, _ struct{}) (r *sgin.Result) {
+	r.GET("/users/:id", sgin.Ho(func(c *sgin.Ctx, _ struct{}) (r *sgin.Result) {
 		return r.SetCode("").SetStatus("")
 	}))
 

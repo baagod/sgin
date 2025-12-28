@@ -85,7 +85,7 @@ func (a *API) parseRequestParams(op *Operation, t reflect.Type) {
 	var body []reflect.StructField // 用于收集映射到 RequestBody 的字段
 	mime := MIMEJSON               // 默认媒体类型
 
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		f := t.Field(i)
 		desc := f.Tag.Get("doc")                                       // 获取描述
 		required := strings.Contains(f.Tag.Get("binding"), "required") // 检查是否必填

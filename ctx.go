@@ -377,8 +377,15 @@ func (c *Ctx) autoFormat(body any) {
 
 	// 按 Accept 头协商返回数据
 	accept := c.GetHeader(HeaderAccept)
-	if (strings.Contains(accept, MIMEXML) || strings.Contains(accept, MIMETextXML)) &&
-		!strings.Contains(accept, MIMETextHTML) {
+
+	// 浏览器直接访问时通常包含 text/html，此时默认返回 JSON。
+	if strings.Contains(accept, MIMETextHTML) {
+		_ = c.SendJSON(body)
+		return
+	}
+
+	// 明确请求 XML 且不请求 HTML 时返回 XML
+	if strings.Contains(accept, MIMEXML) || strings.Contains(accept, MIMETextXML) {
 		_ = c.SendXML(body)
 		return
 	}
