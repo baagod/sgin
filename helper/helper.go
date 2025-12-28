@@ -70,7 +70,7 @@ func Convert(t reflect.Type, field string, v any) any {
 		// 创建一个新的目标类型切片
 		s := reflect.MakeSlice(t, 0, vv.Len())
 
-		for i := range vv.Len() {
+		for i := 0; i < vv.Len(); i++ {
 			// 关键：递归调用 convertType 转换元素。
 			// 这种递归让它可以完美支持多维数组。
 			s = reflect.Append(s, reflect.ValueOf(Convert(

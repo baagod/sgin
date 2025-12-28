@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/baagod/sgin/v2"
+	"github.com/baagod/sgin"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/language"
 )

@@ -24,7 +24,7 @@
 ## 安装
 
 ```bash
-go get github.com/baagod/sgin/v2
+go get github.com/baagod/sgin
 ```
 
 ## 快速开始
@@ -32,7 +32,7 @@ go get github.com/baagod/sgin/v2
 ```go
 package main
 
-import "github.com/baagod/sgin/v2"
+import "github.com/baagod/sgin"
 
 type HelloReq struct {
     Name string `form:"name" binding:"required"` // 自动绑定 Query 或 Form
