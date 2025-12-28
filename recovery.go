@@ -15,22 +15,6 @@ import (
 	"github.com/bytedance/sonic"
 )
 
-// ANSI Color Codes
-const (
-	reset   = "\033[0m"
-	red     = "\033[31m"
-	green   = "\033[32m"
-	yellow  = "\033[33m"
-	blue    = "\033[34m"
-	magenta = "\033[35m"
-	cyan    = "\033[36m"
-	bold    = "\033[1m"
-	bgRed   = "\033[41m"
-	bgBlue  = "\033[44m"
-	black   = "\033[30m"
-	white   = "\033[97m"
-)
-
 // Stack 存储堆栈的关键信息
 type Stack struct {
 	File        string `json:"file"`
@@ -42,11 +26,12 @@ type Stack struct {
 
 type RecoverInfo struct {
 	Time        string   `json:"time"`
+	Path        string   `json:"path"`
 	Method      string   `json:"method"`
 	Host        string   `json:"host"`
-	Path        string   `json:"path"`
-	ContentType string   `json:"content"`
 	IP          string   `json:"ip"`
+	ContentType string   `json:"content"`
+	Accept      string   `json:"accept"`
 	Traceid     string   `json:"traceid"`
 	Error       string   `json:"error"`
 	Sources     []*Stack `json:"stack"`
@@ -58,9 +43,10 @@ func (r *RecoverInfo) String() string {
 	printf(sb, "\n%s PANIC RECOVERED %s\n", bgRed+white+bold, reset)
 	printf(sb, "%sTime:%s         %s\n", green, reset, r.Time)
 	printf(sb, "%sRequest:%s      %s %s\n", yellow, reset, r.Method, r.Path)
+	printf(sb, "%sIP:%s           %s\n", yellow, reset, r.IP)
 	printf(sb, "%sHost:%s         %s\n", white, reset, r.Host)
 	printf(sb, "%sContent-Type:%s %s\n", yellow, reset, r.ContentType)
-	printf(sb, "%sIP:%s           %s\n", yellow, reset, r.IP)
+	printf(sb, "%sAccept:%s %s\n", yellow, reset, r.Accept)
 	printf(sb, "%sTraceID:%s      %s\n", yellow, reset, r.Traceid)
 	printf(sb, "%sError:%s        %v\n", red, reset, r.Error)
 
@@ -119,11 +105,12 @@ var Recovery = He(func(c *Ctx) error {
 
 			info := RecoverInfo{
 				Time:        time.Now().Format("2006-01-02 15:04:05"),
+				Path:        c.Request.URL.Path,
 				Method:      c.Request.Method,
 				Host:        c.Request.Host,
-				Path:        c.Request.URL.Path,
-				ContentType: c.GetHeader(HeaderContentType),
 				IP:          c.IP(),
+				ContentType: c.GetHeader(HeaderContentType),
+				Accept:      c.GetHeader(HeaderAccept),
 				Traceid:     c.traceid,
 				Error:       err.Error(),
 				Sources:     stack(3),

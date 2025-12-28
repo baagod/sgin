@@ -32,11 +32,19 @@ var Logger = Hn(func(c *Ctx) {
 	errMsg := gc.Errors.ByType(gin.ErrorTypePrivate).String()
 
 	// 生成 Text 消息
-	msg := fmt.Sprintf("[GIN] %s | status=%d latency=%s ip=%s method=%s path=%s traceid=%s",
-		t, status, latency, ip, c.Request.Method, path, traceid,
+	methodColor := methodColor(c.Request.Method)
+	msg := fmt.Sprintf(
+		"[sgin] %s%s %s%s%s | path=%s%s%s status=%s%d%s latency=%s%s%s ip=%s%s%s traceid=%s%s%s",
+		cyan, t, methodColor, c.Request.Method, reset,
+		cyan, path, reset,
+		cyan, status, reset,
+		cyan, latency, reset,
+		cyan, ip, reset,
+		cyan, traceid, reset,
 	)
+
 	if errMsg != "" {
-		msg += " | error=" + errMsg
+		msg += fmt.Sprintf(" | error=%s%s%s", cyan, errMsg, reset)
 	}
 
 	// 如果了 Logger 回调则执行并返回，否则输出默认日志到控制台。
@@ -66,3 +74,26 @@ var Logger = Hn(func(c *Ctx) {
 
 	fmt.Println(msg)
 })
+
+func methodColor(method string) string {
+	switch method {
+	case "GET":
+		return green
+	case "POST":
+		return blue
+	case "PUT":
+		return yellow
+	case "DELETE":
+		return red
+	case "PATCH":
+		return yellow + bold
+	case "HEAD":
+		return magenta
+	case "OPTIONS":
+		return white
+	case "TRACE":
+		return cyan
+	default:
+		return cyan
+	}
+}

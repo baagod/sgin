@@ -28,7 +28,7 @@ type Ctx struct {
 	Request *http.Request
 	Writer  gin.ResponseWriter
 	Params  gin.Params
-	Keys    map[string]any
+	Keys    map[any]any
 
 	engine  *Engine
 	ctx     *gin.Context
@@ -313,7 +313,7 @@ func (c *Ctx) Next() error {
 }
 
 // Get 设置或将值存储到上下文，不会发生 panic。
-func (c *Ctx) Get(key string, value ...any) any {
+func (c *Ctx) Get(key any, value ...any) any {
 	if len(value) > 0 {
 		c.ctx.Set(key, value[0])
 		return value[0]
