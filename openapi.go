@@ -2,7 +2,9 @@ package sgin
 
 import (
 	"bytes"
+	"maps"
 	"regexp"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -128,12 +130,11 @@ func (o *Operation) Clone() *Operation {
 		return nil
 	}
 
-	var clone Operation
-	if data, err := yaml.Marshal(o); err == nil {
-		_ = yaml.Unmarshal(data, &clone)
-	}
+	clone := *o
+	clone.Parameters = slices.Clone(o.Parameters)
+	clone.Tags = slices.Clone(o.Tags)
+	clone.Responses = maps.Clone(o.Responses)
 
-	clone.Hidden = o.Hidden
 	if clone.Responses == nil {
 		clone.Responses = map[string]*ResponseBody{}
 	}

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -14,7 +14,7 @@ import (
 
 var (
 	hMeta      HandleMeta
-	structType = reflect.TypeOf(struct{}{})
+	structType = reflect.TypeFor[struct{}]()
 )
 
 type HandleArg struct {
@@ -58,13 +58,13 @@ type Handler = gin.HandlerFunc
 // H 创建一个带有 [输入] 和 [输出] 的强类型处理器 (支持 OpenAPI)
 func H[I any, R any](f func(*Ctx, I) (R, error)) Handler {
 	// 预先计算类型
-	tIn := reflect.TypeOf((*I)(nil)).Elem()
+	tIn := reflect.TypeFor[I]()
 	ptrIn := tIn.Kind() == reflect.Ptr
 	if ptrIn { // 如果传递指针，会变成 **I，需要再次解引用。
 		tIn = tIn.Elem()
 	}
 
-	tOut := helper.Deref(reflect.TypeOf((*R)(nil)).Elem()) // 同上
+	tOut := helper.Deref(reflect.TypeFor[R]())
 
 	// 构造原生 Gin 闭包
 	h := func(gc *gin.Context) {

@@ -2,6 +2,7 @@ package sgin
 
 import (
 	"encoding/json"
+	"iter"
 	"mime/multipart"
 	"net"
 	"net/netip"
@@ -9,7 +10,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 )
 
 // JSON Schema 类型常量
@@ -24,12 +25,12 @@ const (
 
 // 特殊的 JSON Schema 格式
 var (
-	timeType       = reflect.TypeOf(time.Time{})
-	ipType         = reflect.TypeOf(net.IP{})
-	ipAddrType     = reflect.TypeOf(netip.Addr{})
-	urlType        = reflect.TypeOf(url.URL{})
-	rawMessageType = reflect.TypeOf(json.RawMessage{})
-	fileHeaderType = reflect.TypeOf(multipart.FileHeader{})
+	timeType       = reflect.TypeFor[time.Time]()
+	ipType         = reflect.TypeFor[net.IP]()
+	ipAddrType     = reflect.TypeFor[netip.Addr]()
+	urlType        = reflect.TypeFor[url.URL]()
+	rawMessageType = reflect.TypeFor[json.RawMessage]()
+	fileHeaderType = reflect.TypeFor[multipart.FileHeader]()
 )
 
 type Schema struct {
@@ -56,52 +57,53 @@ func (s *Schema) MarshalYAML() (any, error) {
 	return tmp, nil // 返回指针会有递归错误
 }
 
-// fieldInfo 用于存储字段的详细信息，包括其直接父级类型。
-// 这在处理复杂的内嵌结构体时非常有用。
-type fieldInfo struct {
+// Field 用于存储字段的详细信息，包括其直接父级类型。
+type Field struct {
 	Parent reflect.Type
-	Field  reflect.StructField
+	Name   reflect.StructField
 }
 
-// getFields 通过广度优先搜索（BFS）遍历一个类型的所有字段，并在发现每个字段时调用回调函数。
-// 它处理内嵌结构体，并通过 visited 集合避免无限递归。
-// 使用迭代式 BFS 配合 head 索引，实现高效且清晰的队列操作。
-func getFields(t reflect.Type, callback func(info fieldInfo)) {
-	// 使用切片模拟队列，并用 head 索引追踪队列头部
-	queue := []reflect.Type{t}
-	// visited 集合用于防止对同一结构体类型的重复处理
-	visited := map[reflect.Type]struct{}{t: {}}
+// getFields 通过广度优先搜索（BFS）遍历类型 t 的所有字段。
+func getFields(t reflect.Type) iter.Seq[Field] {
+	return func(yield func(Field) bool) {
+		// 使用切片模拟队列，并用 head 索引追踪队列头部
+		queue := []reflect.Type{t}
+		// visited 集合用于防止对同一结构体类型的重复处理
+		visited := map[reflect.Type]struct{}{t: {}}
 
-	// 队列处理循环：head 索引在每次迭代中递增，len(queue) 会动态更新
-	for head := 0; head < len(queue); head++ {
-		currentTyp := queue[head] // 获取当前待处理的类型
+		// 队列处理循环：head 索引在每次迭代中递增，len(queue) 会动态更新
+		for head := 0; head < len(queue); head++ {
+			currentTyp := queue[head] // 获取当前待处理的类型
 
-		// 遍历当前类型的所有字段
-		for i := 0; i < currentTyp.NumField(); i++ {
-			f := currentTyp.Field(i)
+			// 遍历当前类型的所有字段
+			for i := range currentTyp.NumField() {
+				f := currentTyp.Field(i)
 
-			// 忽略非导出字段（小写字母开头），因为它们不会被 JSON 序列化
-			if !f.IsExported() {
-				continue
-			}
-
-			// 如果是内嵌字段（匿名字段），则需要进一步处理其内部结构
-			if f.Anonymous {
-				// 解引用以获取实际类型，因为内嵌字段可能是指针
-				embeddedTyp := helper.Deref(f.Type)
-
-				// 只有当内嵌的是结构体且该类型尚未被访问过时，才将其加入队列等待处理
-				if embeddedTyp.Kind() == reflect.Struct {
-					if _, ok := visited[embeddedTyp]; !ok {
-						visited[embeddedTyp] = struct{}{}
-						queue = append(queue, embeddedTyp) // 将新类型加入队列尾部
-					}
+				// 忽略非导出字段（小写字母开头），因为它们不会被 JSON 序列化
+				if !f.IsExported() {
+					continue
 				}
-				continue // 内嵌字段本身不直接作为 Schema 属性，而是其内部字段会通过回调处理
-			}
 
-			// 对于非内嵌的普通字段，执行传入的回调函数
-			callback(fieldInfo{Parent: currentTyp, Field: f})
+				// 如果是内嵌字段（匿名字段），则需要进一步处理其内部结构
+				if f.Anonymous {
+					// 解引用以获取实际类型，因为内嵌字段可能是指针
+					embeddedTyp := helper.Deref(f.Type)
+
+					// 只有当内嵌的是结构体且该类型尚未被访问过时，才将其加入队列等待处理
+					if embeddedTyp.Kind() == reflect.Struct {
+						if _, ok := visited[embeddedTyp]; !ok {
+							visited[embeddedTyp] = struct{}{}
+							queue = append(queue, embeddedTyp) // 将新类型加入队列尾部
+						}
+					}
+					continue // 内嵌字段本身不直接作为 Schema 属性，而是其内部字段会通过回调处理
+				}
+
+				// 对于非内嵌的普通字段，执行 yield。
+				if !yield(Field{Parent: currentTyp, Name: f}) {
+					return
+				}
+			}
 		}
 	}
 }

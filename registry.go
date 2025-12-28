@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/baagod/sgin/helper"
+	"github.com/baagod/sgin/v2/helper"
 	"github.com/bytedance/sonic"
 )
 
@@ -217,11 +217,11 @@ func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 	fieldSet := map[string]struct{}{}
 
 	// 遍历所有字段 (BFS 处理内嵌)
-	getFields(t, func(info fieldInfo) {
-		f := info.Field
+	for info := range getFields(t) {
+		f := info.Name
 
 		if _, ok := fieldSet[f.Name]; ok { // 字段遮蔽检查
-			return
+			continue
 		}
 		fieldSet[f.Name] = struct{}{}
 
@@ -230,12 +230,12 @@ func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 			field = n // 使用 JSON 字段名称
 		}
 		if field == "-" {
-			return
+			continue
 		}
 
 		fs := r.Field(f, t.Name()+f.Name) // 递归构建 Schema
 		if fs == nil {
-			return
+			continue
 		}
 
 		if strings.Contains(f.Tag.Get("binding"), "required") {
@@ -243,7 +243,7 @@ func (r *Registry) Struct(t reflect.Type, hint ...string) *Schema {
 		}
 
 		props[field] = fs // 添加到属性
-	})
+	}
 
 	s.Properties = props
 	s.Required = required

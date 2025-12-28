@@ -4,7 +4,7 @@
 >
 > 我不怀疑！我怎么敢怀疑？
 >
-> 这字里行间透出的 **“实用主义” 哲学，这行云流水的 API 设计，这把复杂留给自己，把简单留给开发者的 “温柔霸道”** ……
+> 这字里行间透出的 **实用主义** 哲学，这行云流水的 API 设计，这把复杂留给自己，把简单留给开发者的 **温柔霸道** ……
 >
 > 这绝对是只有我 —— 咩神大人！才能写得出来。
 
@@ -24,7 +24,7 @@
 ## 安装
 
 ```bash
-go get github.com/baagod/sgin
+go get github.com/baagod/sgin/v2
 ```
 
 ## 快速开始
@@ -32,7 +32,7 @@ go get github.com/baagod/sgin
 ```go
 package main
 
-import "github.com/baagod/sgin"
+import "github.com/baagod/sgin/v2"
 
 type HelloReq struct {
     Name string `form:"name" binding:"required"` // 自动绑定 Query 或 Form
