@@ -1,9 +1,17 @@
-feat: 新增 YAML/TOML 支持并标准化 MIME 类型
+feat(ctx): 重构参数方法命名并新增流控制与响应方法
 
-- 在 `helpers.go` 中删除所有未使用的 `MIME...UTF8` 常量（现代 Gin 已自动处理 UTF-8）
-- 将 `MIMETextYAML` 从 `text/yaml` 改为标准的 `application/yaml`
-- 新增 `MIMETextYAMLX` (`application/x-yaml`) 以兼容旧客户端
-- 新增 `MIMETOML` (`application/toml`) 支持
-- 在 `ctx.go` 中新增 `SendYAML` 和 `SendTOML` 方法
-- 扩展 `autoFormat` 内容协商范围，支持 YAML 和 TOML
-- 在 `engine.go` 中使用标准化的 MIME 类型常量
+- 重构 URI 参数获取：`Param()` → `Uri()`，字段名 `Params` → `Uris`
+- 重构请求参数获取：`Value()` 系列方法 → `Param()` 系列方法
+  - `ParamAny()`, `ParamInt()`, `ParamBool()` 等类型安全方法
+  - 新增 `ParamArray()`, `ParamMap()` 支持多值和映射参数
+- 优化 `Params()` 方法：统一使用 `MultipartForm()` 解析，支持 Body 覆盖 Query
+- 新增请求信息方法：`AddUri()`, `RemoteIP()`
+- 增强 Cookie 控制：`SetCookie()` 支持 `SameSite` 可选参数
+- 新增响应方法：
+  - `SendSSEvent()`: 服务器发送事件
+  - `SendReader()`: 从 `io.Reader` 发送数据
+  - `Redirect()`: HTTP 重定向
+  - `SendBinary()`: 发送二进制数据
+- 实现 `context.Context` 接口：`Deadline()`, `Done()`, `Err()`, `Value(key any)`
+- 新增 `Content()` 辅助方法：设置 `Content-Type` 响应头
+- 同步 README 文档：更新所有示例代码和 API 说明

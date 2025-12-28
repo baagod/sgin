@@ -150,18 +150,18 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 
 `sgin` 统一处理来自不同来源的参数（`Query`, `Form`, `JSON`, `XML`, `Multipart`），并提供类型安全的访问方法。
 
-- `Values() map[string]any`: 获取所有请求参数的键值对（Body 覆盖 Query）
-- `Value(string, ...string) string`: 获取字符串参数，支持默认值
-- `ValueAny(string, ...any) any`, `ValueInt, ...`: 获取查询或请求体参数
-- `ValueFile(string) (*multipart.FileHeader, error)`: 获取上传的文件
+- `Params() map[string]any`: 获取所有请求参数的键值对（Body 覆盖 Query）
+- `Param(string, ...string) string`: 获取字符串参数，支持默认值
+- `ParamAny(string, ...any) any`, `ParamInt, ...`: 获取查询或请求体参数
+- `ParamFile(string) (*multipart.FileHeader, error)`: 获取上传的文件
 - `SaveFile(*multipart.FileHeader, string) error`: 保存上传的文件到指定路径
 
 #### 请求信息
 
 - `Method() string`: 获取 HTTP 方法
 - `IP() string`: 获取客户端 IP 地址
-- `Path(full ...bool) string`: 获取请求路径（`full=true` 返回路由定义路径）
-- `Param(key string) string`: 获取路径参数（如 `/users/:id` 中的 `id`）
+- `Path(full ...bool) string`: 获取请求路径 (`full=true` 返回路由定义路径)
+- `Uri(key string) string`: 获取路径参数 (如 `/users/:id` 中的 `id`)
 - `GetHeader(key string, value ...string) string`: 获取支持默认值的请求头
 - `RawBody() []byte`: 获取原始请求体 (支持多次读取)
 - `StatusCode() int`: 获取响应状态码
@@ -175,13 +175,13 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 - `Header(key string, value string) *Ctx`: 设置响应头
 - `Content(value string) *Ctx`: 设置 `Content-Type` 头
 
-#### 上下文存储与中间件
+#### 上下文存储
 
 - `Get(key string, value ...any) any`: 获取或设置上下文值，不会发生 `panic`。
-- `Next() error`: 执行下一个中间件或处理器
 
 #### 追踪与调试
 
+- `Next() error`: 执行下一个中间件或处理器
 - `TraceID() string`: 获取当前请求的跟踪 ID（自动生成或从 `X-Request-ID` 头读取）
 - `Gin() *gin.Context`: 返回底层的 `*gin.Context`（用于访问原生 gin 功能）
 
@@ -276,7 +276,7 @@ File: example/main.go:80 GetUserProfile()
 File: example/main.go:86 HandleAPI()
   83   // HandleAPI API 层处理函数
   84   func HandleAPI(c *sgin.Ctx) {
-  85       userID := c.Param("id")
+  85       userID := c.Uri("id")
   86 >     profile, err := GetUserProfile(userID)
   87       if err != nil {
   88           c.Send(err)
@@ -321,7 +321,7 @@ File: reflect/value.go:586 call()
       "file": "example/main.go",
       "line": 88,
       "func": "HandleAPI",
-      "source": "85   // HandleAPI API 层处理函数\n86   func HandleAPI(c *sgin.Ctx) {\n87       userID := c.Param(\"id\")\n88 >     profile, err := GetUserProfile(userID)\n89       if err != nil {\n90           c.Send(err)\n91           return\n"
+      "source": "85   // HandleAPI API 层处理函数\n86   func HandleAPI(c *sgin.Ctx) {\n87       userID := c.Uri(\"id\")\n88 >     profile, err := GetUserProfile(userID)\n89       if err != nil {\n90           c.Send(err)\n91           return\n"
     },
     {
       "file": "reflect/value.go",
