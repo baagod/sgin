@@ -36,15 +36,15 @@ type Ctx struct {
 	traceid string         // 请求的 [跟踪ID]
 }
 
-func newCtx(ctx *gin.Context, e *Engine) *Ctx {
+func newCtx(gc *gin.Context, e *Engine) *Ctx {
 	c := &Ctx{
 		engine:  e,
-		ctx:     ctx,
-		traceid: ctx.GetHeader(HeaderXRequestID),
-		Request: ctx.Request,
-		Writer:  ctx.Writer,
-		Uris:    ctx.Params,
-		Keys:    ctx.Keys,
+		ctx:     gc,
+		traceid: gc.GetHeader(HeaderXRequestID),
+		Request: gc.Request,
+		Writer:  gc.Writer,
+		Uris:    gc.Params,
+		Keys:    gc.Keys,
 	}
 
 	if c.traceid == "" {
@@ -55,7 +55,7 @@ func newCtx(ctx *gin.Context, e *Engine) *Ctx {
 	return c
 }
 
-// ------ 参数获取 ------
+// ---- 参数获取 ----
 
 // Params 获取所有 请求 (含 Body) 参数
 func (c *Ctx) Params() map[string]any {
@@ -201,7 +201,7 @@ func (c *Ctx) SaveFile(file *multipart.FileHeader, dst string) error {
 	return c.ctx.SaveUploadedFile(file, dst)
 }
 
-// ------ 请求信息 ------
+// ---- 请求信息 ----
 
 func (c *Ctx) Method() string {
 	return c.Request.Method
@@ -216,21 +216,22 @@ func (c *Ctx) RemoteIP() string {
 }
 
 // Path 返回请求路径
-// 假设请求: /users/123/profile?view=full&name=John%20Doe
-// Path() 返回: "/users/123/profile"
-// Path(true) 返回: "/users/:id/profile"
+// 默认返回经过解码的具体请求路径，例如: "/users/123/profile"
+// 传递 true 时返回路由定义字符串，例如: "/users/:id/profile"
 func (c *Ctx) Path(full ...bool) string {
-	if full != nil {
+	if len(full) > 0 && full[0] {
 		return c.ctx.FullPath()
 	}
 	return c.ctx.Request.URL.Path
 }
 
-func (c *Ctx) Uri(key string) string {
+// URI 返回与给定键匹配的路径参数 (如 /users/:id 中的 id 值)
+func (c *Ctx) URI(key string) string {
 	return c.ctx.Param(key)
 }
 
-func (c *Ctx) AddUri(key, value string) *Ctx {
+// AddURI 将指定的路径参数添加到上下文
+func (c *Ctx) AddURI(key, value string) *Ctx {
 	c.ctx.AddParam(key, value)
 	return c
 }
@@ -261,7 +262,7 @@ func (c *Ctx) Cookie(name string) (string, error) {
 	return c.ctx.Cookie(name)
 }
 
-func (c *Ctx) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool, samesite ...http.SameSite) *Ctx {
+func (c *Ctx) SetCookie(name, value, path, domain string, maxAge int, secure, httpOnly bool, samesite ...http.SameSite) *Ctx {
 	if len(samesite) > 0 {
 		c.ctx.SetSameSite(samesite[0])
 	}
@@ -269,7 +270,7 @@ func (c *Ctx) SetCookie(name, value string, maxAge int, path, domain string, sec
 	return c
 }
 
-// ------ 响应控制 ------
+// ---- 响应控制 ----
 
 func (c *Ctx) Send(body any) error {
 	c.autoFormat(body)
@@ -339,17 +340,15 @@ func (c *Ctx) SendStream(step func(w io.Writer) bool) bool {
 
 // SendReader 从 io.Reader 发送数据
 // size: 数据长度 (如果未知传 -1)
-// contentType: 显式指定类型，为空则尝试自动探测或使用 header。
 func (c *Ctx) SendReader(reader io.Reader, size int64, extraHeaders ...map[string]string) error {
 	c.ctx.Abort()
 	ct := c.GetHeader(HeaderContentType)
-	var headers map[string]string
 
-	if len(extraHeaders) > 0 {
-		headers = extraHeaders[0]
+	if len(extraHeaders) == 0 {
+		extraHeaders = append(extraHeaders, map[string]string{})
 	}
 
-	c.ctx.DataFromReader(c.StatusCode(), size, ct, reader, headers)
+	c.ctx.DataFromReader(c.StatusCode(), size, ct, reader, extraHeaders[0])
 	return nil
 }
 
@@ -383,9 +382,10 @@ func (c *Ctx) Content(value string) *Ctx {
 	return c
 }
 
-// ------ 上下文存储与 Context.context 接口 ------
+// ---- 上下文信息 ----
 
-// Get 设置或将值存储到上下文，不会发生 panic。
+// Get 获取或设置上下文值，不会发生 `panic`。
+// 如果没有找到，还会尝试去获取 `Value(key)` 的值。
 func (c *Ctx) Get(key any, value ...any) any {
 	if len(value) > 0 {
 		c.ctx.Set(key, value[0])
@@ -397,7 +397,7 @@ func (c *Ctx) Get(key any, value ...any) any {
 	return c.ctx.Value(key)
 }
 
-func (c *Ctx) Deadline() (deadline time.Time, ok bool) {
+func (c *Ctx) Deadline() (time.Time, bool) {
 	return c.ctx.Deadline()
 }
 
@@ -413,7 +413,7 @@ func (c *Ctx) Value(key any) any {
 	return c.ctx.Value(key)
 }
 
-// ------ 追踪与调试 ------
+// ---- 追踪与调试 ----
 
 func (c *Ctx) Next() error {
 	c.ctx.Next()
@@ -430,7 +430,7 @@ func (c *Ctx) Gin() *gin.Context {
 	return c.ctx
 }
 
-// ------ 私有方法 ------
+// ---- 私有方法 ----
 
 // locale 获取或设置验证器翻译语言
 func (c *Ctx) locale(tag ...language.Tag) language.Tag {
