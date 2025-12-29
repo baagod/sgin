@@ -23,11 +23,10 @@
 
 ## 安装
 
-```bash
-go get github.com/baagod/sgin/v2
+```go
+go get github.com/baagod/sgin/v2 // go1.24+
+go get github.com/baagod/sgin // go1.20
 ```
-
-如果你需要 go1.20 支持，使用 `go get github.com/baagod/sgin`。
 
 ## 快速开始
 
@@ -160,24 +159,30 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 
 - `Method() string`: 获取 HTTP 方法
 - `IP() string`: 获取客户端 IP 地址
-- `Path(full ...bool) string`: 获取请求路径 (`full=true` 返回路由定义路径)
-- `Uri(key string) string`: 获取路径参数 (如 `/users/:id` 中的 `id`)
+- `Path(full ...bool)`: 返回请求路径，`full=true` 返回路由定义的路径。
+- `URI(key string) string`: 获取路径参数 (如 `/users/:id` 中的 `id`)
+- `AddURI(key, value string) *Ctx`: 将指定的路径参数添加到上下文
 - `GetHeader(key string, value ...string) string`: 获取支持默认值的请求头
 - `RawBody() []byte`: 获取原始请求体 (支持多次读取)
 - `StatusCode() int`: 获取响应状态码
-- `Cookie(name string) (string, error)`: 获取 Cookie 值
-- `SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool)`: 设置 Cookie
+- `Cookie(string) (string, error)`: 获取 Cookie 值
+- `SetCookie(...) *Ctx`: 设置 Cookie
 
 #### 响应控制
 
 - `Send(body any) error`: 发送响应，自动根据 `Accept` 头协商格式。
+- `SendXX() error`: 发送指定格式的数据，如 `SendJSON()`。
 - `Status(code int) *Ctx`: 设置响应状态码
 - `Header(key string, value string) *Ctx`: 设置响应头
 - `Content(value string) *Ctx`: 设置 `Content-Type` 头
 
-#### 上下文存储
+#### 上下文信息
 
-- `Get(key string, value ...any) any`: 获取或设置上下文值，不会发生 `panic`。
+- `Get(key any, value ...any) any`: 获取或设置指定键值到上下文，不会发生 `panic`。
+- `DeadlineDeadline() (time.Time, bool)`
+- `Done() <-chan struct{}`
+- `Err() error`
+- `Value(any) any`
 
 #### 追踪与调试
 
@@ -273,23 +278,7 @@ File: example/main.go:80 GetUserProfile()
   82   
   83   // HandleAPI API 层处理函数
  
-File: example/main.go:86 HandleAPI()
-  83   // HandleAPI API 层处理函数
-  84   func HandleAPI(c *sgin.Ctx) {
-  85       userID := c.Uri("id")
-  86 >     profile, err := GetUserProfile(userID)
-  87       if err != nil {
-  88           c.Send(err)
-  89           return
- 
-File: reflect/value.go:586 call()
-  583   }
-  584   
-  585   // Call.
-  586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)
-  587   
-  588   // For testing; see TestCallMethodJump.
-  589   if callGC {
+File: ...
 ```
 
 #### 结构化 JSON 输出
@@ -317,18 +306,7 @@ File: reflect/value.go:586 call()
       "func": "GetUserProfile",
       "source": "79   // GetUserProfile 业务层函数\n80   func GetUserProfile(userID string) (*UserProfile, error) {\n81       // 调用模型层获取用户信息\n82 >     return LoadUserProfile(userID)\n83   }\n84   \n85   // HandleAPI API 层处理函数\n"
     },
-    {
-      "file": "example/main.go",
-      "line": 88,
-      "func": "HandleAPI",
-      "source": "85   // HandleAPI API 层处理函数\n86   func HandleAPI(c *sgin.Ctx) {\n87       userID := c.Uri(\"id\")\n88 >     profile, err := GetUserProfile(userID)\n89       if err != nil {\n90           c.Send(err)\n91           return\n"
-    },
-    {
-      "file": "reflect/value.go",
-      "line": 586,
-      "func": "call",
-      "source": "583   }\n584   \n585   // Call.\n586 > call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abid.retOffset), uint32(frameSize), &regArgs)\n587   \n588   // For testing; see TestCallMethodJump.\n589   if callGC {\n"
-    }
+    ...
   ]
 }
 ```
