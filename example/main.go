@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/baagod/sgin/v2"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/language"
 )
@@ -20,6 +21,10 @@ func main() {
 		Locales: []language.Tag{
 			language.Chinese, // 默认语言（第一个）
 			language.English, // 备用语言
+		},
+		Cors: func(c *cors.Config) {
+			c.AllowCredentials = true
+			c.AllowAllOrigins = true
 		},
 	})
 
