@@ -5,12 +5,13 @@ go 1.20
 require (
 	github.com/bytedance/sonic v1.14.2
 	github.com/clbanning/mxj/v2 v2.7.0
-	github.com/gin-gonic/gin v1.10.1 // gin@v1.10.1 -> 最后支持 1.20 的版本
+	github.com/gin-contrib/cors v1.7.2 // v1.7.2 -> 最后支持 1.20 的版本
+	github.com/gin-gonic/gin v1.10.1 // v1.10.1 -> 最后支持 1.20 的版本
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.26.0 // validator@v10.26.0 -> 最后支持 1.20 的版本
 	github.com/rs/xid v1.6.0
-	github.com/spf13/cast v1.8.0 // cast@v1.8.0 -> 最后支持 1.20 的版本
+	github.com/spf13/cast v1.8.0 // v1.8.0 -> 最后支持 1.20 的版本
 	golang.org/x/text v0.22.0
 	gopkg.in/yaml.v3 v3.0.1
 )
