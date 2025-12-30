@@ -1,7 +1,7 @@
-refactor(ctx): 重构 `Path` 逻辑与 `URI` 参数处理
+feat(core): 引入 `CORS` 支持并重构 `Engine` 中间件加载逻辑
 
-- `Path()`: 逻辑行为调整为默认返回真实请求路径，传递 `full=true` 获取路由定义模式
-- `URI` / `AddURI`: 统一大写命名规范，内部实现切换至底层的 `Param` 与 `AddParam` 方法
-- `SetCookie`: 调整参数签名顺序，将 `path` 和 `domain` 置于 `maxAge` 之前
-- `README.md`: 同步更新相关 API 描述、安装建议及代码示例
-- 规范化 `ctx.go` 中的内部注释章节划分
+- 在 `Config` 结构体中新增 `Cors` 成员，支持集成 `github.com/gin-contrib/cors`。
+- 将中间件初始化逻辑重构至 `useMiddleware` 私有方法。
+- 将 `defaultConfig` 重命名并导出为 `DefaultConfig`。
+- 更新 `README.md` 以包含 `CORS` 配置示例及 `RemoteIP` 方法说明。
+- 优化 `AGENTS.md` 的角色定义并精简 `Rules.md`。

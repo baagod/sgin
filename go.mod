@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/bytedance/sonic v1.14.2
 	github.com/clbanning/mxj/v2 v2.7.0
+	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1

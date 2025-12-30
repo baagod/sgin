@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	ut "github.com/go-playground/universal-translator"
 	"golang.org/x/text/language"
@@ -24,9 +25,10 @@ type Engine struct {
 type Config struct {
 	Mode           string                      // gin.DebugMode | gin.ReleaseMode | gin.TestMode
 	TrustedProxies []string                    // gin.SetTrustedProxies
-	Recovery       func(c *Ctx, out, s string) // 回调 [带颜色的输出] 和 [结构化日志]
+	Recovery       func(c *Ctx, out, s string) // 回调 [带颜色的控制台输出] 和 [结构化 JSON 日志]
 	ErrorHandler   func(c *Ctx, err error) error
-	Logger         func(c *Ctx, out string, s string) // 回调 [纯文本] 和 [JSON] 日志
+	Logger         func(c *Ctx, out string, s string) // 回调 [带颜色的控制台输出] 和 [结构化 JSON 日志]
+	Cors           func(*cors.Config)                 // 默认配置 cors.DefaultConfig()
 	OpenAPI        *API
 	Locales        []language.Tag // 绑定验证错误所使用的多语言支持
 }
@@ -45,8 +47,21 @@ func DefaultErrorHandler(c *Ctx, err error) error {
 	return c.Content(MIMETextPlain).Status(code).Send(err.Error())
 }
 
+// DefaultConfig 默认配置
+func DefaultConfig(config ...Config) (cfg Config) {
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	if cfg.ErrorHandler == nil {
+		cfg.ErrorHandler = DefaultErrorHandler
+	}
+
+	return cfg
+}
+
 func New(config ...Config) *Engine {
-	cfg := defaultConfig(config...)
+	cfg := DefaultConfig(config...)
 	gin.SetMode(cfg.Mode)
 
 	e := &Engine{engine: gin.New(), cfg: cfg}
@@ -58,16 +73,7 @@ func New(config ...Config) *Engine {
 		op:   Operation{Responses: map[string]*ResponseBody{}},
 	}
 
-	// 注册 Engine 注入中间件 (必须在最前)
-	e.Use(func(c *gin.Context) {
-		c.Set(EngineKey, e)
-		c.Next()
-	})
-
-	e.Use(Recovery, Logger) // 注册 [恢复] 和 [日志] 中间件
-	if tr := useTranslator(e); tr != nil {
-		e.Use(tr) // 注册校验翻译器
-	}
+	e.useMiddleware()
 
 	// gin.engine 配置
 	if err := e.engine.SetTrustedProxies(cfg.TrustedProxies); err != nil {
@@ -117,14 +123,22 @@ func (e *Engine) Gin() *gin.Engine {
 	return e.engine
 }
 
-func defaultConfig(config ...Config) (cfg Config) {
-	if len(config) > 0 {
-		cfg = config[0]
+func (e *Engine) useMiddleware() {
+	cfg := e.cfg
+
+	e.Use(func(c *gin.Context) {
+		c.Set(EngineKey, e)
+		c.Next()
+	})
+
+	e.Use(Recovery, Logger)
+	if tr := useTranslator(e); tr != nil {
+		e.Use(tr) // 注册校验翻译器
 	}
 
-	if cfg.ErrorHandler == nil {
-		cfg.ErrorHandler = DefaultErrorHandler
+	if cfg.Cors != nil {
+		corsCfg := cors.DefaultConfig()
+		cfg.Cors(&corsCfg)
+		e.Use(cors.New(corsCfg))
 	}
-
-	return cfg
 }

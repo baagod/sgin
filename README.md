@@ -19,13 +19,13 @@
 - 📚 **代码即文档**: 定义好结构体，OpenAPI 3.1 文档自动生成。
 - 🛡️ **统一错误处理**: 内置错误规范与标准化响应封装。
 - 🌍 **国际化支持**: 基于 `langeuge.tag` 的参数校验错误自动翻译。
--  ⚡ **开箱即用**: 内置结构化日志、`Panic` 堆栈追踪等工程化组件。
+-  ⚡ **开箱即用**: 内置结构化日志、`panic` 堆栈追踪、跨域处理等工程化组件。
 
 ## 安装
 
 ```go
 go get github.com/baagod/sgin/v2 // go1.24+
-go get github.com/baagod/sgin // go1.20
+go get github.com/baagod/sgin    // go1.20
 ```
 
 ## 快速开始
@@ -159,6 +159,7 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 
 - `Method() string`: 获取 HTTP 方法
 - `IP() string`: 获取客户端 IP 地址
+- `RemoteIP() string`: 获取客户端远程 IP 地址
 - `Path(full ...bool)`: 返回请求路径，`full=true` 返回路由定义的路径。
 - `URI(key string) string`: 获取路径参数 (如 `/users/:id` 中的 `id`)
 - `AddURI(key, value string) *Ctx`: 将指定的路径参数添加到上下文
@@ -218,12 +219,19 @@ r := sgin.New(sgin.Config{
     ErrorHandler: func(c *sgin.Ctx, err error) error {
         return c.Status(500).Send(map[string]any{"msg": err.Error()})
     },
-    
+	
     // 自定义日志处理器
     Logger: func(c *sgin.Ctx, out, stru string) {
         fmt.Print(out) // 控制台友好且带有颜色的日志
         log.Info(stru) // 结构化的 JSON 日志
     },
+
+    // 集成 cors 跨域中间件，默认 c=cors.DefaultConfig()。
+    // 详细参考：https://github.com/gin-contrib/cors
+    Cors: func(c *cors.Config) {
+        c.AllowCredentials = true
+        c.AllowAllOrigins = true
+    }
 })
 ```
 
