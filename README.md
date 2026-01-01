@@ -19,7 +19,7 @@
 - 📚 **代码即文档**: 定义好结构体，OpenAPI 3.1 文档自动生成。
 - 🛡️ **统一错误处理**: 内置错误规范与标准化响应封装。
 - 🌍 **国际化支持**: 基于 `langeuge.tag` 的参数校验错误自动翻译。
--  ⚡ **开箱即用**: 内置结构化日志、`panic` 堆栈追踪、跨域处理等工程化组件。
+-  ⚡ **开箱即用**: 内置结构化日志、`panic` 堆栈追踪、跨域处理和 JWT 认证等组件。
 
 ## 安装
 
@@ -363,8 +363,6 @@ type LoginReq struct {
 
 无需额外配置，`sgin` 会分析你的 Handler 输入输出结构体，自动生成 OpenAPI 3.1 规范。
 
-**配置文档信息：**
-
 ```go
 r := sgin.New(sgin.Config{
     OpenAPI: sgin.NewAPI(func(api *sgin.API) {
@@ -373,8 +371,6 @@ r := sgin.New(sgin.Config{
     }),
 })
 ```
-
-**路由级文档配置：**
 
 在注册路由时，传入 `func(*sgin.Operation)` 即可补充接口描述：
 
@@ -390,6 +386,70 @@ r.POST("/orders",
 ```
 
 启动后访问 `/docs` 即可查看漂亮风格的交互式文档。
+
+## JWT 认证
+
+`sgin` 提供了一个类型安全、泛型驱动的 JWT 认证组件。它支持 `HS256` (默认) 及所有标准签名算法。示例：
+
+```go
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
+// 创建 JWT 管理器
+// 泛型参数 [*User] 指定了 Claims 中 Data 字段的类型
+// 必填参数: key=上下文键名, secret=密钥, timeout=过期时间
+var auth = sgin.NewJWT[*User]("user", []byte("secret"), 24*time.Hour)
+
+r := sgin.New()
+
+// 注册 jwt 解析中间件
+// Auth() 接受可选的 failure 回调，用于自定义验证失败时的行为。
+r.Use(Auth.Auth(nil))
+
+// 授权中间件
+r.GET("/auth", func He(func(c *sgin.Ctx) error {
+    user := &User{ID: 1, Name: "Baago"}
+    token, err := auth.Issue(user) // 签发 Token
+    if err != nil {
+       return err
+    }
+    return c.Send(gin.H{"token": token})
+}))
+
+// 在业务处理中使用
+r.GET("/profile", sgin.Ho(func(c *sgin.Ctx, _ struct{}) *User {
+    // 从上下文获取强类型的用户数据
+    if claims, ok := c.Get("user").(*sgin.Claims[*User]); ok {
+        return claims.Data
+    }
+    return User{}
+}))
+```
+
+在签发 Token 前，你可能需要修改 `RegisteredClaims` 或 Token Header，使用 `IssueWith`:
+
+```go
+Auth.IssueWith(user, func(c *sgin.Claims[*User]) {
+    c.ID = "custom-id" // 修改标准 Claims
+}, jwt.WithHeader("kid", "key-1")) // 修改 Token Header
+```
+
+如果有更复杂的业务校验，可以让你的数据结构实现 `sgin.ClaimsValidator` 接口：
+
+```go
+func (u *User) ValidateClaims(ctx *jwt.RegisteredClaims) error {
+    if u.ID <= 0 {
+        return errors.New("invalid user id")
+    }
+    // 还可以校验标准 Claims，如 Issuer, Subject 等。
+    if ctx.Issuer != "sgin" {
+        return errors.New("invalid issuer")
+    }
+    return nil
+}
+```
 
 ## 贡献
 
