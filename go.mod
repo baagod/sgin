@@ -10,6 +10,7 @@ require (
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.26.0 // validator@v10.26.0 -> 最后支持 1.20 的版本
+	github.com/golang-jwt/jwt/v4 v4.5.2 // v5 不支持 1.20
 	github.com/rs/xid v1.6.0
 	github.com/spf13/cast v1.8.0 // v1.8.0 -> 最后支持 1.20 的版本
 	golang.org/x/text v0.22.0

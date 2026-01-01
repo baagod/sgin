@@ -19,13 +19,13 @@
 - 📚 **代码即文档**: 定义好结构体，OpenAPI 3.1 文档自动生成。
 - 🛡️ **统一错误处理**: 内置错误规范与标准化响应封装。
 - 🌍 **国际化支持**: 基于 `langeuge.tag` 的参数校验错误自动翻译。
--  ⚡ **开箱即用**: 内置结构化日志、`Panic` 堆栈追踪等工程化组件。
+-  ⚡ **开箱即用**: 内置结构化日志、`panic` 堆栈追踪、跨域处理和 JWT 认证等组件。
 
 ## 安装
 
 ```go
 go get github.com/baagod/sgin/v2 // go1.24+
-go get github.com/baagod/sgin // go1.20
+go get github.com/baagod/sgin    // go1.20
 ```
 
 ## 快速开始
@@ -33,7 +33,7 @@ go get github.com/baagod/sgin // go1.20
 ```go
 package main
 
-import "github.com/baagod/sgin"
+import "github.com/baagod/sgin/v2"
 
 type HelloReq struct {
     Name string `form:"name" binding:"required"` // 自动绑定 Query 或 Form
@@ -159,6 +159,7 @@ r = r.SetStatus(0, 1001) // 设置自定义状态码和代码
 
 - `Method() string`: 获取 HTTP 方法
 - `IP() string`: 获取客户端 IP 地址
+- `RemoteIP() string`: 获取客户端远程 IP 地址
 - `Path(full ...bool)`: 返回请求路径，`full=true` 返回路由定义的路径。
 - `URI(key string) string`: 获取路径参数 (如 `/users/:id` 中的 `id`)
 - `AddURI(key, value string) *Ctx`: 将指定的路径参数添加到上下文
@@ -218,12 +219,19 @@ r := sgin.New(sgin.Config{
     ErrorHandler: func(c *sgin.Ctx, err error) error {
         return c.Status(500).Send(map[string]any{"msg": err.Error()})
     },
-
+	
     // 自定义日志处理器
     Logger: func(c *sgin.Ctx, out, stru string) {
         fmt.Print(out) // 控制台友好且带有颜色的日志
         log.Info(stru) // 结构化的 JSON 日志
     },
+
+    // 集成 cors 跨域中间件，默认 c=cors.DefaultConfig()。
+    // 详细参考：https://github.com/gin-contrib/cors
+    Cors: func(c *cors.Config) {
+        c.AllowCredentials = true
+        c.AllowAllOrigins = true
+    }
 })
 ```
 
@@ -355,8 +363,6 @@ type LoginReq struct {
 
 无需额外配置，`sgin` 会分析你的 Handler 输入输出结构体，自动生成 OpenAPI 3.1 规范。
 
-**配置文档信息：**
-
 ```go
 r := sgin.New(sgin.Config{
     OpenAPI: sgin.NewAPI(func(api *sgin.API) {
@@ -365,8 +371,6 @@ r := sgin.New(sgin.Config{
     }),
 })
 ```
-
-**路由级文档配置：**
 
 在注册路由时，传入 `func(*sgin.Operation)` 即可补充接口描述：
 
@@ -382,6 +386,55 @@ r.POST("/orders",
 ```
 
 启动后访问 `/docs` 即可查看漂亮风格的交互式文档。
+
+## JWT 认证
+
+`sgin` 提供了一个类型安全、泛型驱动的 JWT 认证组件。它支持 `HS256` (默认) 及所有标准签名算法。示例：
+
+```go
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
+// 创建 JWT 管理器
+// 泛型参数 [*User] 指定了 Claims 中 Data 字段的类型
+// 必填参数: key=上下文键名, secret=密钥, timeout=过期时间
+var auth = sgin.NewJWT[*User]("user", []byte("secret"), 24*time.Hour)
+
+r := sgin.New()
+
+// 注册 jwt 解析中间件
+// Auth() 接受可选的 failure 回调，用于自定义验证失败时的行为。
+r.Use(Auth.Auth(nil))
+
+// 授权中间件
+r.GET("/auth", func He(func(c *sgin.Ctx) error {
+    user := &User{ID: 1, Name: "Baago"}
+    token, err := auth.Issue(user) // 签发 Token
+    if err != nil {
+       return err
+    }
+    return c.Send(gin.H{"token": token})
+}))
+
+// 在业务处理中使用
+r.GET("/profile", sgin.Ho(func(c *sgin.Ctx, _ struct{}) *User {
+    // 从上下文获取强类型的用户数据
+    if claims, ok := c.Get("user").(*sgin.Claims[*User]); ok {
+        return claims.Data
+    }
+    return User{}
+}))
+```
+
+在签发 Token 前，你可能需要修改 `RegisteredClaims`，使用 `IssueWith`:
+
+```go
+Auth.IssueWith(user, func(c *sgin.Claims[*User]) {
+    c.ID = "custom-id" // 修改标准 Claims
+})
+```
 
 ## 贡献
 

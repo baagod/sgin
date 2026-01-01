@@ -1,1 +1,1 @@
-sync(engine, ctx)
+sync(jwt)
