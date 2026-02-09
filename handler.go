@@ -129,10 +129,11 @@ func bindV3(c *Ctx, t reflect.Type, ptr bool) (_ any, err error) {
         func(o any) error {
             b := binding.Default(gc.Request.Method, gc.ContentType())
 
-            // 针对会消耗 Body 的格式（JSON, XML, YAML），
-            // 尝试转换为 BindingBody 并使用缓存式绑定。
+            // 针对会消耗 Body 的格式使用 BindingBody 进行缓存式绑定
             if b == binding.JSON || b == binding.XML || b == binding.YAML {
-                return gc.ShouldBindBodyWith(o, b.(binding.BindingBody))
+                if bb, ok := b.(binding.BindingBody); ok {
+                    return gc.ShouldBindBodyWith(o, bb)
+                }
             }
 
             // 其他情况（如 Form, Query 或断言失败）使用标准绑定
